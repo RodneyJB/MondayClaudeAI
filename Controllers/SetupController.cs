@@ -45,23 +45,6 @@ namespace MondayClaudeAI.Controllers
     <span id='boardIdText'>Loading...</span>
     <br><br>
     <button onclick='loadBoard()'>Load Board Columns</button>
-    &nbsp;
-    <button onclick='loadSampleItems()'>Load Sample Items</button>
-</div>
-
-<div class='box' id='sampleBox' style='display:none'>
-    <h2>Sample Data</h2>
-    <p>Click a row to populate the column view below.</p>
-    <div style='overflow-x:auto'>
-        <table class='sample-table' id='sampleTable'>
-            <thead id='sampleHead'></thead>
-            <tbody id='sampleBody'></tbody>
-        </table>
-    </div>
-    <div id='columnValueView' style='margin-top:15px; display:none'>
-        <h3>Selected Item Column Values</h3>
-        <div id='columnValueGrid'></div>
-    </div>
 </div>
 
 <div class='box'>
@@ -153,6 +136,23 @@ namespace MondayClaudeAI.Controllers
         <div>
             <h3>Connected Board Columns</h3>
             <div id='relationColumns'>Click Load Board Columns</div>
+        </div>
+    </div>
+
+    <div style='margin-top:15px; border-top:1px solid #eee; padding-top:15px;'>
+        <button onclick='loadSampleItems()'>Load Sample Items</button>
+        <div id='sampleBox' style='display:none; margin-top:10px;'>
+            <p style='margin:0 0 8px 0; color:#555; font-size:13px;'>Click a row to see all column values.</p>
+            <div style='overflow-x:auto'>
+                <table class='sample-table' id='sampleTable'>
+                    <thead id='sampleHead'></thead>
+                    <tbody id='sampleBody'></tbody>
+                </table>
+            </div>
+            <div id='columnValueView' style='margin-top:15px; display:none'>
+                <h3>Selected Item Column Values</h3>
+                <div id='columnValueGrid'></div>
+            </div>
         </div>
     </div>
 </div>
@@ -276,7 +276,7 @@ namespace MondayClaudeAI.Controllers
         let html = `<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;'>`;
         allColumns.forEach(col => {
             const cv = item.column_values.find(v => v.id === col.id);
-            const val = cv ? (cv.text || '<em style=''color:#aaa''>empty</em>') : '<em style=''color:#aaa''>empty</em>';
+            const val = cv ? (cv.text || '<em style=""color:#aaa"">empty</em>') : '<em style=""color:#aaa"">empty</em>';
             html += `
                 <div class='item'>
                     <div style='font-size:12px;color:#555'>${getTypeIcon(col.type)} ${col.title}</div>
