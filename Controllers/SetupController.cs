@@ -379,7 +379,7 @@ function renderColumnList(columns, css) {
 
 </body>
 </html>",
-                ContentType = "text/html"
+                ContentType = "text/html; charset=utf-8"
             };
         }
     }
