@@ -12,267 +12,185 @@ namespace MondayClaudeAI.Controllers
             {
                 Content = @"
 <html>
-
 <head>
     <script src='https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js'></script>
 
     <style>
-        body {
-            font-family: Arial;
-            padding: 20px;
-            background: #f7f8fa;
-        }
-
-        h1 {
-            margin-bottom: 10px;
-        }
-
-        button {
-            padding: 8px 14px;
-            margin: 5px 0;
-            cursor: pointer;
-        }
-
-        .box {
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 15px;
-        }
-
-        .column {
-            padding: 8px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .mirror {
-            color: #b45309;
-            font-weight: bold;
-        }
-
-        .relation {
-            color: #2563eb;
-            font-weight: bold;
-        }
-
-        .normal {
-            color: #111827;
-        }
-
-        pre {
-            white-space: pre-wrap;
-            font-size: 12px;
-        }
+        body { font-family: Arial; padding: 20px; background:#f7f8fa; }
+        .box { background:white; border:1px solid #ddd; border-radius:8px; padding:15px; margin-top:15px; }
+        .grid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; }
+        .column-card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; }
+        .item { padding:8px; border-bottom:1px solid #eee; font-size:13px; }
+        .normal { color:#111827; }
+        .mirror { color:#b45309; font-weight:bold; }
+        .relation { color:#2563eb; font-weight:bold; }
+        select, input, textarea { width:100%; padding:8px; box-sizing:border-box; }
+        button { padding:8px 14px; cursor:pointer; }
     </style>
 </head>
 
 <body>
 
-    <h1>Claude AI Setup</h1>
+<h1>Claude AI Setup</h1>
 
-    <div class='box'>
-        <strong>Current Board ID:</strong>
-        <span id='boardIdText'>Loading...</span>
-        <br><br>
+<div class='box'>
+    <strong>Current Board ID:</strong>
+    <span id='boardIdText'>Loading...</span>
+    <br><br>
+    <button onclick='loadBoard()'>Load Board Columns</button>
+</div>
 
-        <button onclick='loadBoard()'>
-            Load Board Columns
-        </button>
+<div class='box'>
+    <h2>Board Structure</h2>
+
+    <div class='grid'>
+        <div class='column-card'>
+            <h3>Direct Board Columns</h3>
+            <div id='directColumns'>Click Load Board Columns</div>
+        </div>
+
+        <div class='column-card'>
+            <h3>Mirror Columns</h3>
+            <div id='mirrorColumns'>Click Load Board Columns</div>
+        </div>
+
+        <div class='column-card'>
+            <h3>Connected Board Columns</h3>
+            <div id='relationColumns'>Click Load Board Columns</div>
+        </div>
     </div>
+</div>
 
-    <div class='box'>
-        <h2>Board Columns</h2>
-        <div id='columns'>Click Load Board Columns</div>
-    </div>
+<div class='box'>
+    <h2>Create AI Task</h2>
 
-    <div class='box'>
-        <h2>Mirror / Connected Columns</h2>
-        <p>
-            Mirror columns are read-only. To update them, the app must update the connected source item.
-        </p>
-        <div id='mirrorColumns'>No data loaded yet</div>
-    </div>
+    <label>Task Name</label><br>
+    <input id='taskName' placeholder='Read registration document'><br><br>
 
-    <div class='box'>
-        <h2>Create AI Task</h2>
+    <label>Trigger / Source Column</label><br>
+    <select id='sourceColumn'></select><br><br>
 
-        <label>Task Name</label><br>
-        <input id='taskName' style='width:100%;padding:8px' placeholder='Read registration document'><br><br>
+    <label>AI Instruction</label><br>
+    <textarea id='aiInstruction' style='height:100px' placeholder='Read the uploaded document and extract registration number and expiry date'></textarea><br><br>
 
-        <label>Trigger / Source Column</label><br>
-        <select id='sourceColumn' style='width:100%;padding:8px'></select><br><br>
+    <label>Output Column</label><br>
+    <select id='outputColumn'></select><br><br>
 
-        <label>AI Instruction</label><br>
-        <textarea id='aiInstruction' style='width:100%;height:100px;padding:8px' placeholder='Read the uploaded document and extract registration number and expiry date'></textarea><br><br>
+    <button onclick='saveTask()'>Save AI Task</button>
 
-        <label>Output Column</label><br>
-        <select id='outputColumn' style='width:100%;padding:8px'></select><br><br>
+    <pre id='taskResult'></pre>
+</div>
 
-        <button onclick='saveTask()'>
-            Save AI Task
-        </button>
+<pre id='contextHidden' style='display:none'></pre>
 
-        <pre id='taskResult'></pre>
-    </div>
+<script>
+    const monday = window.mondaySdk();
 
-    <pre id='contextHidden' style='display:none'></pre>
+    let boardId = null;
+    let allColumns = [];
 
-    <script>
+    monday.listen('context', function(res) {
+        boardId = res.data.boardId;
+        document.getElementById('boardIdText').innerText = boardId;
+        document.getElementById('contextHidden').innerText = JSON.stringify(res.data, null, 2);
+    });
 
-        const monday = window.mondaySdk();
+    async function loadBoard() {
+        if (boardId == null) {
+            alert('Board ID not loaded yet');
+            return;
+        }
 
-        let boardId = null;
-        let allColumns = [];
+        const response = await fetch('/test-columns/' + boardId);
+        const data = await response.json();
 
-        monday.listen('context', function(res)
-        {
-            boardId = res.data.boardId;
+        allColumns = data.data.boards[0].columns;
 
-            document.getElementById('boardIdText').innerText = boardId;
+        renderColumnGroups(allColumns);
+        fillDropdowns(allColumns);
+    }
 
-            document.getElementById('contextHidden').innerText =
-                JSON.stringify(res.data, null, 2);
+    function renderColumnGroups(columns) {
+        const direct = columns.filter(c =>
+            c.type !== 'mirror' &&
+            c.type !== 'board_relation'
+        );
+
+        const mirrors = columns.filter(c => c.type === 'mirror');
+
+        const relations = columns.filter(c => c.type === 'board_relation');
+
+        document.getElementById('directColumns').innerHTML =
+            renderColumnList(direct, 'normal');
+
+        document.getElementById('mirrorColumns').innerHTML =
+            renderColumnList(mirrors, 'mirror');
+
+        document.getElementById('relationColumns').innerHTML =
+            renderColumnList(relations, 'relation');
+    }
+
+    function renderColumnList(columns, css) {
+        if (columns.length === 0) {
+            return '<em>No columns found</em>';
+        }
+
+        let html = '';
+
+        columns.forEach(col => {
+            html += `
+                <div class='item ${css}'>
+                    <strong>${col.title}</strong><br>
+                    ID: ${col.id}<br>
+                    Type: ${col.type}
+                </div>
+            `;
         });
 
-        async function loadBoard()
-        {
-            if(boardId == null)
-            {
-                alert('Board ID not loaded yet');
-                return;
-            }
+        return html;
+    }
 
-            const response = await fetch('/test-columns/' + boardId);
-            const data = await response.json();
+    function fillDropdowns(columns) {
+        const source = document.getElementById('sourceColumn');
+        const output = document.getElementById('outputColumn');
 
-            allColumns = data.data.boards[0].columns;
+        source.innerHTML = '';
+        output.innerHTML = '';
 
-            renderColumns(allColumns);
-            renderMirrorColumns(allColumns);
-            fillDropdowns(allColumns);
-        }
+        columns.forEach(col => {
+            source.innerHTML += `
+                <option value='${col.id}'>
+                    ${col.title} (${col.type}) - ${col.id}
+                </option>
+            `;
 
-        function renderColumns(columns)
-        {
-            let html = '';
-
-            columns.forEach(col => {
-
-                let css = 'normal';
-
-                if(col.type === 'mirror')
-                {
-                    css = 'mirror';
-                }
-
-                if(col.type === 'board_relation')
-                {
-                    css = 'relation';
-                }
-
-                html += `
-                    <div class='column ${css}'>
-                        <strong>${col.title}</strong><br>
-                        ID: ${col.id}<br>
-                        Type: ${col.type}
-                    </div>
-                `;
-            });
-
-            document.getElementById('columns').innerHTML = html;
-        }
-
-        function renderMirrorColumns(columns)
-        {
-            const filtered = columns.filter(c =>
-                c.type === 'mirror' ||
-                c.type === 'board_relation'
-            );
-
-            if(filtered.length === 0)
-            {
-                document.getElementById('mirrorColumns').innerHTML =
-                    'No mirror or connected-board columns found.';
-                return;
-            }
-
-            let html = '';
-
-            filtered.forEach(col => {
-
-                let note = '';
-
-                if(col.type === 'mirror')
-                {
-                    note = 'Read only. Use connected board relation to update source item.';
-                }
-
-                if(col.type === 'board_relation')
-                {
-                    note = 'Connection column. Needed to find linked item and source board.';
-                }
-
-                html += `
-                    <div class='column'>
-                        <strong>${col.title}</strong><br>
-                        ID: ${col.id}<br>
-                        Type: ${col.type}<br>
-                        Note: ${note}
-                    </div>
-                `;
-            });
-
-            document.getElementById('mirrorColumns').innerHTML = html;
-        }
-
-        function fillDropdowns(columns)
-        {
-            const source = document.getElementById('sourceColumn');
-            const output = document.getElementById('outputColumn');
-
-            source.innerHTML = '';
-            output.innerHTML = '';
-
-            columns.forEach(col => {
-
-                source.innerHTML += `
+            if (col.type !== 'mirror') {
+                output.innerHTML += `
                     <option value='${col.id}'>
                         ${col.title} (${col.type}) - ${col.id}
                     </option>
                 `;
+            }
+        });
+    }
 
-                if(col.type !== 'mirror')
-                {
-                    output.innerHTML += `
-                        <option value='${col.id}'>
-                            ${col.title} (${col.type}) - ${col.id}
-                        </option>
-                    `;
-                }
-            });
-        }
+    function saveTask() {
+        const task = {
+            boardId: boardId,
+            taskName: document.getElementById('taskName').value,
+            sourceColumnId: document.getElementById('sourceColumn').value,
+            aiInstruction: document.getElementById('aiInstruction').value,
+            outputColumnId: document.getElementById('outputColumn').value
+        };
 
-        function saveTask()
-        {
-            const task = {
-                boardId: boardId,
-                taskName: document.getElementById('taskName').value,
-                sourceColumnId: document.getElementById('sourceColumn').value,
-                aiInstruction: document.getElementById('aiInstruction').value,
-                outputColumnId: document.getElementById('outputColumn').value
-            };
+        document.getElementById('taskResult').innerText =
+            JSON.stringify(task, null, 2);
 
-            document.getElementById('taskResult').innerText =
-                JSON.stringify(task, null, 2);
-
-            alert('Task prepared. Next step is saving this to backend/database.');
-        }
-
-    </script>
+        alert('Task prepared. Next step is saving this to backend/database.');
+    }
+</script>
 
 </body>
-
 </html>",
                 ContentType = "text/html"
             };
