@@ -34,6 +34,7 @@ public class MondayWebhookController : ControllerBase
                 success = true
             });
         }
+        
         catch (Exception ex)
         {
             Console.WriteLine("ERROR:");
