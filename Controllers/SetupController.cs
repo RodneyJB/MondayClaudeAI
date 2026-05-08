@@ -41,6 +41,26 @@ namespace MondayClaudeAI.Controllers
 </div>
 
 <div class='box'>
+    <h2>Create AI Task</h2>
+
+    <label>Task Name</label><br>
+    <input id='taskName' placeholder='Read registration document'><br><br>
+
+    <label>Trigger / Source Column</label><br>
+    <select id='sourceColumn'></select><br><br>
+
+    <label>AI Instruction</label><br>
+    <textarea id='aiInstruction' style='height:100px' placeholder='Read the uploaded document and extract registration number and expiry date'></textarea><br><br>
+
+    <label>Output Column</label><br>
+    <select id='outputColumn'></select><br><br>
+
+    <button onclick='saveTask()'>Save AI Task</button>
+
+    <pre id='taskResult'></pre>
+</div>
+
+<div class='box'>
     <h2>Board Structure</h2>
 
     <div class='grid'>
@@ -61,25 +81,7 @@ namespace MondayClaudeAI.Controllers
     </div>
 </div>
 
-<div class='box'>
-    <h2>Create AI Task</h2>
 
-    <label>Task Name</label><br>
-    <input id='taskName' placeholder='Read registration document'><br><br>
-
-    <label>Trigger / Source Column</label><br>
-    <select id='sourceColumn'></select><br><br>
-
-    <label>AI Instruction</label><br>
-    <textarea id='aiInstruction' style='height:100px' placeholder='Read the uploaded document and extract registration number and expiry date'></textarea><br><br>
-
-    <label>Output Column</label><br>
-    <select id='outputColumn'></select><br><br>
-
-    <button onclick='saveTask()'>Save AI Task</button>
-
-    <pre id='taskResult'></pre>
-</div>
 
 <pre id='contextHidden' style='display:none'></pre>
 
