@@ -339,7 +339,7 @@ namespace MondayClaudeAI.Controllers
         files: '📎',
         mirror: '🪞',
         board_relation: '🔗',
-        connect_boards: '🔗',
+        connect_boards: '🔗🔗',
         email: '✉️',
         phone: '☎️',
         location: '📍',
