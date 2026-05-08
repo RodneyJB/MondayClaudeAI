@@ -18,14 +18,14 @@ namespace MondayClaudeAI.Controllers
     <style>
         body { font-family: Arial; padding: 20px; background:#f7f8fa; }
         .box { background:white; border:1px solid #ddd; border-radius:8px; padding:15px; margin-top:15px; }
-        .grid { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; }
-        .column-card { background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; }
+        .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; }
         .item { padding:8px; border-bottom:1px solid #eee; font-size:13px; }
-        .normal { color:#111827; }
+        select, input, textarea { width:100%; padding:8px; box-sizing:border-box; margin-top:4px; }
+        button { padding:8px 14px; cursor:pointer; margin-top:8px; }
         .mirror { color:#b45309; font-weight:bold; }
         .relation { color:#2563eb; font-weight:bold; }
-        select, input, textarea { width:100%; padding:8px; box-sizing:border-box; }
-        button { padding:8px 14px; cursor:pointer; }
+        .normal { color:#111827; }
+        .mapping-row { display:grid; grid-template-columns:1fr 1fr 80px; gap:10px; margin-bottom:8px; }
     </style>
 </head>
 
@@ -43,19 +43,67 @@ namespace MondayClaudeAI.Controllers
 <div class='box'>
     <h2>Create AI Task</h2>
 
-    <label>Task Name</label><br>
-    <input id='taskName' placeholder='Read registration document'><br><br>
+    <h3>1. Trigger</h3>
 
-    <label>Trigger / Source Column</label><br>
-    <select id='sourceColumn'></select><br><br>
+    <label>Trigger Type</label>
+    <select id='triggerType'></select>
 
-    <label>AI Instruction</label><br>
-    <textarea id='aiInstruction' style='height:100px' placeholder='Read the uploaded document and extract registration number and expiry date'></textarea><br><br>
+    <br><br>
 
-    <label>Output Column</label><br>
-    <select id='outputColumn'></select><br><br>
+    <label>Trigger Column</label>
+    <select id='triggerColumn'></select>
 
-    <button onclick='saveTask()'>Save AI Task</button>
+    <h3>2. Input</h3>
+
+    <label>Input Source Column</label>
+    <select id='inputColumn'></select>
+
+    <br><br>
+
+    <label>Input Type</label>
+    <select id='inputType'>
+        <option value='file'>Uploaded File / Document</option>
+        <option value='text'>Text Column</option>
+        <option value='update'>Item Updates</option>
+        <option value='mirror'>Mirror / Connected Data</option>
+    </select>
+
+    <h3>3. AI Task</h3>
+
+    <label>Task Name</label>
+    <input id='taskName' placeholder='Read car registration document'>
+
+    <br><br>
+
+    <label>AI Instruction</label>
+    <textarea id='aiInstruction' style='height:120px' placeholder='Read the uploaded document. Extract VIN, registration number, registration date, expiry date and owner. Return clean JSON.'></textarea>
+
+    <h3>4. Conditions</h3>
+
+    <label>Condition Type</label>
+    <select id='conditionType'></select>
+
+    <br><br>
+
+    <label>Condition Column</label>
+    <select id='conditionColumn'></select>
+
+    <br><br>
+
+    <label>Condition Value</label>
+    <input id='conditionValue' placeholder='Example: Open / Done / Empty / > 10'>
+
+    <h3>5. Output Mapping</h3>
+
+    <p>Map AI result fields to Monday columns.</p>
+
+    <div id='mappingRows'></div>
+
+    <button onclick='addMappingRow()'>+ Add Mapping</button>
+
+    <br><br>
+
+    <button onclick='prepareTask()'>Prepare AI Task</button>
 
     <pre id='taskResult'></pre>
 </div>
@@ -64,24 +112,22 @@ namespace MondayClaudeAI.Controllers
     <h2>Board Structure</h2>
 
     <div class='grid'>
-        <div class='column-card'>
+        <div>
             <h3>Direct Board Columns</h3>
             <div id='directColumns'>Click Load Board Columns</div>
         </div>
 
-        <div class='column-card'>
+        <div>
             <h3>Mirror Columns</h3>
             <div id='mirrorColumns'>Click Load Board Columns</div>
         </div>
 
-        <div class='column-card'>
+        <div>
             <h3>Connected Board Columns</h3>
             <div id='relationColumns'>Click Load Board Columns</div>
         </div>
     </div>
 </div>
-
-
 
 <pre id='contextHidden' style='display:none'></pre>
 
@@ -91,11 +137,50 @@ namespace MondayClaudeAI.Controllers
     let boardId = null;
     let allColumns = [];
 
+    const triggerTypes = [
+        'When item created',
+        'When column changes',
+        'When status changes',
+        'When date arrives',
+        'When file uploaded',
+        'When update added',
+        'Every time period',
+        'Manual AI Run',
+        'When subitem created'
+    ];
+
+    const conditionTypes = [
+        'No condition',
+        'If status is something',
+        'If column is empty',
+        'If number meets condition',
+        'If item is in group',
+        'If person is someone',
+        'If dropdown meets condition',
+        'If date is before',
+        'If mirror column contains value'
+    ];
+
     monday.listen('context', function(res) {
         boardId = res.data.boardId;
         document.getElementById('boardIdText').innerText = boardId;
         document.getElementById('contextHidden').innerText = JSON.stringify(res.data, null, 2);
     });
+
+    fillStaticDropdowns();
+
+    function fillStaticDropdowns() {
+        const trigger = document.getElementById('triggerType');
+        const condition = document.getElementById('conditionType');
+
+        triggerTypes.forEach(t => {
+            trigger.innerHTML += `<option value='${t}'>${t}</option>`;
+        });
+
+        conditionTypes.forEach(c => {
+            condition.innerHTML += `<option value='${c}'>${c}</option>`;
+        });
+    }
 
     async function loadBoard() {
         if (boardId == null) {
@@ -109,7 +194,8 @@ namespace MondayClaudeAI.Controllers
         allColumns = data.data.boards[0].columns;
 
         renderColumnGroups(allColumns);
-        fillDropdowns(allColumns);
+        fillColumnDropdowns(allColumns);
+        addMappingRow();
     }
 
     function renderColumnGroups(columns) {
@@ -119,17 +205,11 @@ namespace MondayClaudeAI.Controllers
         );
 
         const mirrors = columns.filter(c => c.type === 'mirror');
-
         const relations = columns.filter(c => c.type === 'board_relation');
 
-        document.getElementById('directColumns').innerHTML =
-            renderColumnList(direct, 'normal');
-
-        document.getElementById('mirrorColumns').innerHTML =
-            renderColumnList(mirrors, 'mirror');
-
-        document.getElementById('relationColumns').innerHTML =
-            renderColumnList(relations, 'relation');
+        document.getElementById('directColumns').innerHTML = renderColumnList(direct, 'normal');
+        document.getElementById('mirrorColumns').innerHTML = renderColumnList(mirrors, 'mirror');
+        document.getElementById('relationColumns').innerHTML = renderColumnList(relations, 'relation');
     }
 
     function renderColumnList(columns, css) {
@@ -152,43 +232,101 @@ namespace MondayClaudeAI.Controllers
         return html;
     }
 
-    function fillDropdowns(columns) {
-        const source = document.getElementById('sourceColumn');
-        const output = document.getElementById('outputColumn');
+    function fillColumnDropdowns(columns) {
+        fillSelect('triggerColumn', columns, true);
+        fillSelect('inputColumn', columns, true);
+        fillSelect('conditionColumn', columns, true);
+    }
 
-        source.innerHTML = '';
-        output.innerHTML = '';
+    function fillSelect(selectId, columns, includeMirrors) {
+        const select = document.getElementById(selectId);
+        select.innerHTML = '';
 
         columns.forEach(col => {
-            source.innerHTML += `
+            if (!includeMirrors && col.type === 'mirror') {
+                return;
+            }
+
+            select.innerHTML += `
                 <option value='${col.id}'>
                     ${col.title} (${col.type}) - ${col.id}
                 </option>
             `;
-
-            if (col.type !== 'mirror') {
-                output.innerHTML += `
-                    <option value='${col.id}'>
-                        ${col.title} (${col.type}) - ${col.id}
-                    </option>
-                `;
-            }
         });
     }
 
-    function saveTask() {
+    function addMappingRow() {
+        const container = document.getElementById('mappingRows');
+
+        const row = document.createElement('div');
+        row.className = 'mapping-row';
+
+        const aiField = document.createElement('input');
+        aiField.placeholder = 'AI field, example: vin';
+
+        const mondayColumn = document.createElement('select');
+
+        allColumns.forEach(col => {
+            if (col.type !== 'mirror') {
+                const option = document.createElement('option');
+                option.value = col.id;
+                option.text = `${col.title} (${col.type}) - ${col.id}`;
+                mondayColumn.appendChild(option);
+            }
+        });
+
+        const removeButton = document.createElement('button');
+        removeButton.innerText = 'Remove';
+        removeButton.onclick = function() {
+            row.remove();
+        };
+
+        row.appendChild(aiField);
+        row.appendChild(mondayColumn);
+        row.appendChild(removeButton);
+
+        container.appendChild(row);
+    }
+
+    function prepareTask() {
+        const mappings = [];
+
+        document.querySelectorAll('.mapping-row').forEach(row => {
+            const inputs = row.querySelectorAll('input, select');
+
+            mappings.push({
+                aiField: inputs[0].value,
+                mondayColumnId: inputs[1].value
+            });
+        });
+
         const task = {
             boardId: boardId,
             taskName: document.getElementById('taskName').value,
-            sourceColumnId: document.getElementById('sourceColumn').value,
-            aiInstruction: document.getElementById('aiInstruction').value,
-            outputColumnId: document.getElementById('outputColumn').value
+            trigger: {
+                type: document.getElementById('triggerType').value,
+                columnId: document.getElementById('triggerColumn').value
+            },
+            input: {
+                type: document.getElementById('inputType').value,
+                columnId: document.getElementById('inputColumn').value
+            },
+            condition: {
+                type: document.getElementById('conditionType').value,
+                columnId: document.getElementById('conditionColumn').value,
+                value: document.getElementById('conditionValue').value
+            },
+            ai: {
+                provider: 'Claude',
+                instruction: document.getElementById('aiInstruction').value
+            },
+            outputs: mappings
         };
 
         document.getElementById('taskResult').innerText =
             JSON.stringify(task, null, 2);
 
-        alert('Task prepared. Next step is saving this to backend/database.');
+        alert('AI task prepared. Next step is saving this task to the backend.');
     }
 </script>
 
