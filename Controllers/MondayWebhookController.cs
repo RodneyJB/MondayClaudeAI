@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MondayClaudeAI.Controllers;
@@ -13,27 +14,36 @@ public class MondayWebhookController : ControllerBase
     }
 
     [HttpPost("webhook")]
-    public async Task<IActionResult> Webhook([FromBody] dynamic body)
+    public async Task<IActionResult> Webhook([FromBody] JsonElement body)
     {
-        // Monday verification challenge
-        if (body.challenge != null)
-        {
-            return Ok(new
-            {
-                challenge = body.challenge
-            });
-        }
-
         try
         {
-            Console.WriteLine(body);
+            Console.WriteLine(body.ToString());
 
-            return Ok();
+            // Monday challenge check
+            if (body.TryGetProperty("challenge", out JsonElement challenge))
+            {
+                return Ok(new
+                {
+                    challenge = challenge.GetString()
+                });
+            }
+
+            return Ok(new
+            {
+                success = true
+            });
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
-            return Ok();
+            Console.WriteLine("ERROR:");
+            Console.WriteLine(ex.ToString());
+
+            return Ok(new
+            {
+                success = false,
+                error = ex.Message
+            });
         }
     }
 }
