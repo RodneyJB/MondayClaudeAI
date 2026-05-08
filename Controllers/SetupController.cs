@@ -26,6 +26,8 @@ namespace MondayClaudeAI.Controllers
         .relation { color:#2563eb; font-weight:bold; }
         .normal { color:#111827; }
         .mapping-row { display:grid; grid-template-columns:1fr 1fr 80px; gap:10px; margin-bottom:8px; }
+        .two-col { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+        .type-badge { font-size:12px; color:#555; }
     </style>
 </head>
 
@@ -45,13 +47,17 @@ namespace MondayClaudeAI.Controllers
 
     <h3>1. Trigger</h3>
 
-    <label>Trigger Type</label>
-    <select id='triggerType'></select>
+<div class='two-col'>
+    <div>
+        <label>Trigger Type</label>
+        <select id='triggerType'></select>
+    </div>
 
-    <br><br>
-
-    <label>Trigger Column</label>
-    <select id='triggerColumn'></select>
+    <div>
+        <label>Trigger Column</label>
+        <select id='triggerColumn'></select>
+    </div>
+</div>
 
     <h3>2. Input</h3>
 
@@ -212,25 +218,66 @@ namespace MondayClaudeAI.Controllers
         document.getElementById('relationColumns').innerHTML = renderColumnList(relations, 'relation');
     }
 
-    function renderColumnList(columns, css) {
-        if (columns.length === 0) {
-            return '<em>No columns found</em>';
-        }
+    function getTypeIcon(type) {
+    const icons = {
+        name: '🔤',
+        text: '🔤',
+        long_text: '📝',
+        numbers: '🔢',
+        numeric: '🔢',
+        date: '📅',
+        timeline: '📆',
+        hour: '⏰',
+        time_tracking: '⏱️',
+        status: '🟦',
+        color: '🟦',
+        dropdown: '⬇️',
+        people: '👤',
+        person: '👤',
+        file: '📎',
+        files: '📎',
+        mirror: '🪞',
+        board_relation: '🔗',
+        connect_boards: '🔗',
+        email: '✉️',
+        phone: '☎️',
+        location: '📍',
+        link: '🔗',
+        checkbox: '☑️',
+        formula: '🧮',
+        item_id: '🆔',
+        subtasks: '📌',
+        auto_number: '#️⃣',
+        country: '🌍',
+        rating: '⭐',
+        vote: '🗳️',
+        week: '📅',
+        world_clock: '🌐'
+    };
 
-        let html = '';
+    return icons[type] || '▫️';
+}
 
-        columns.forEach(col => {
-            html += `
-                <div class='item ${css}'>
-                    <strong>${col.title}</strong><br>
-                    ID: ${col.id}<br>
-                    Type: ${col.type}
-                </div>
-            `;
-        });
-
-        return html;
+function renderColumnList(columns, css) {
+    if (columns.length === 0) {
+        return '<em>No columns found</em>';
     }
+
+    let html = '';
+
+    columns.forEach(col => {
+        html += `
+            <div class='item ${css}'>
+                <strong>${col.title}</strong><br>
+                <span class='type-badge'>
+                    ${getTypeIcon(col.type)} ${col.type}
+                </span>
+            </div>
+        `;
+    });
+
+    return html;
+}
 
     function fillColumnDropdowns(columns) {
         fillSelect('triggerColumn', columns, true);
@@ -249,7 +296,7 @@ namespace MondayClaudeAI.Controllers
 
             select.innerHTML += `
                 <option value='${col.id}'>
-                    ${col.title} (${col.type}) - ${col.id}
+                    ${getTypeIcon(col.type)} ${col.title} (${col.type})
                 </option>
             `;
         });
@@ -270,7 +317,7 @@ namespace MondayClaudeAI.Controllers
             if (col.type !== 'mirror') {
                 const option = document.createElement('option');
                 option.value = col.id;
-                option.text = `${col.title} (${col.type}) - ${col.id}`;
+                option.text = `${getTypeIcon(col.type)} ${col.title} (${col.type})`;
                 mondayColumn.appendChild(option);
             }
         });
