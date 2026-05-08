@@ -17,7 +17,13 @@ public class TestController : ControllerBase
     public async Task<string> Test(long boardId)
     {
         var token = Environment.GetEnvironmentVariable("MONDAY_API_TOKEN");
-
         return await _monday.GetBoardColumns(boardId, token!);
+    }
+
+    [HttpGet("/test-items/{boardId}")]
+    public async Task<string> GetItems(long boardId)
+    {
+        var token = Environment.GetEnvironmentVariable("MONDAY_API_TOKEN");
+        return await _monday.GetBoardItems(boardId, token!);
     }
 }

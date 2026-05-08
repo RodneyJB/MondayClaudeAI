@@ -47,4 +47,33 @@ public class MondayService
 
         return await response.Content.ReadAsStringAsync();
     }
+
+    public async Task<string> GetBoardItems(long boardId, string token)
+    {
+        var query = $@"
+        {{
+            boards(ids: {boardId}) {{
+                items_page(limit: 50) {{
+                    items {{
+                        id
+                        name
+                        column_values {{
+                            id
+                            text
+                            value
+                        }}
+                    }}
+                }}
+            }}
+        }}";
+
+        var body = JsonSerializer.Serialize(new { query });
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.monday.com/v2");
+        request.Headers.Add("Authorization", token);
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        var response = await _http.SendAsync(request);
+        return await response.Content.ReadAsStringAsync();
+    }
 }

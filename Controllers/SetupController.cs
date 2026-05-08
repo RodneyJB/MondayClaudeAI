@@ -28,6 +28,11 @@ namespace MondayClaudeAI.Controllers
         .mapping-row { display:grid; grid-template-columns:1fr 1fr 80px; gap:10px; margin-bottom:8px; }
         .two-col { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
         .type-badge { font-size:12px; color:#555; }
+        .sample-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
+        .sample-table th { background:#f1f5f9; text-align:left; padding:6px 8px; border:1px solid #ddd; }
+        .sample-table td { padding:6px 8px; border:1px solid #eee; vertical-align:top; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .sample-table tr:hover td { background:#f8fafc; }
+        .selected-row td { background:#eff6ff !important; }
     </style>
 </head>
 
@@ -40,6 +45,23 @@ namespace MondayClaudeAI.Controllers
     <span id='boardIdText'>Loading...</span>
     <br><br>
     <button onclick='loadBoard()'>Load Board Columns</button>
+    &nbsp;
+    <button onclick='loadSampleItems()'>Load Sample Items</button>
+</div>
+
+<div class='box' id='sampleBox' style='display:none'>
+    <h2>Sample Data</h2>
+    <p>Click a row to populate the column view below.</p>
+    <div style='overflow-x:auto'>
+        <table class='sample-table' id='sampleTable'>
+            <thead id='sampleHead'></thead>
+            <tbody id='sampleBody'></tbody>
+        </table>
+    </div>
+    <div id='columnValueView' style='margin-top:15px; display:none'>
+        <h3>Selected Item Column Values</h3>
+        <div id='columnValueGrid'></div>
+    </div>
 </div>
 
 <div class='box'>
@@ -188,6 +210,85 @@ namespace MondayClaudeAI.Controllers
         });
     }
 
+    let sampleItems = [];
+
+    async function loadSampleItems() {
+        if (boardId == null) {
+            alert('Board ID not loaded yet');
+            return;
+        }
+
+        // load columns too if not already loaded
+        if (allColumns.length === 0) {
+            await loadBoard();
+        }
+
+        const response = await fetch('/test-items/' + boardId);
+        const data = await response.json();
+
+        sampleItems = data.data.boards[0].items_page.items;
+
+        renderSampleTable(sampleItems);
+        document.getElementById('sampleBox').style.display = 'block';
+    }
+
+    function renderSampleTable(items) {
+        if (items.length === 0) {
+            document.getElementById('sampleBody').innerHTML = '<tr><td>No items found</td></tr>';
+            return;
+        }
+
+        // Build header from columns (show first 8 non-mirror columns for readability)
+        const visibleCols = allColumns
+            .filter(c => c.type !== 'mirror' && c.type !== 'board_relation')
+            .slice(0, 8);
+
+        let headHtml = '<tr><th>#</th><th>Name</th>';
+        visibleCols.forEach(c => {
+            headHtml += `<th>${getTypeIcon(c.type)} ${c.title}</th>`;
+        });
+        headHtml += '</tr>';
+        document.getElementById('sampleHead').innerHTML = headHtml;
+
+        let bodyHtml = '';
+        items.forEach((item, idx) => {
+            bodyHtml += `<tr onclick='selectSampleItem(${idx})' style='cursor:pointer'>`;
+            bodyHtml += `<td>${idx + 1}</td><td><strong>${item.name}</strong></td>`;
+            visibleCols.forEach(c => {
+                const cv = item.column_values.find(v => v.id === c.id);
+                const val = cv ? (cv.text || '') : '';
+                bodyHtml += `<td title='${val.split(String.fromCharCode(39)).join(""&apos;"")}'>${val}</td>`;
+            });
+            bodyHtml += '</tr>';
+        });
+        document.getElementById('sampleBody').innerHTML = bodyHtml;
+    }
+
+    function selectSampleItem(idx) {
+        const item = sampleItems[idx];
+
+        // highlight selected row
+        document.querySelectorAll('#sampleBody tr').forEach((r, i) => {
+            r.classList.toggle('selected-row', i === idx);
+        });
+
+        // build column value detail grid
+        let html = `<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;'>`;
+        allColumns.forEach(col => {
+            const cv = item.column_values.find(v => v.id === col.id);
+            const val = cv ? (cv.text || '<em style=''color:#aaa''>empty</em>') : '<em style=''color:#aaa''>empty</em>';
+            html += `
+                <div class='item'>
+                    <div style='font-size:12px;color:#555'>${getTypeIcon(col.type)} ${col.title}</div>
+                    <div style='margin-top:2px'>${val}</div>
+                </div>`;
+        });
+        html += '</div>';
+
+        document.getElementById('columnValueGrid').innerHTML = html;
+        document.getElementById('columnValueView').style.display = 'block';
+    }
+
     async function loadBoard() {
         if (boardId == null) {
             alert('Board ID not loaded yet');
@@ -296,7 +397,7 @@ function renderColumnList(columns, css) {
 
             select.innerHTML += `
                 <option value='${col.id}'>
-                    ${getTypeIcon(col.type)} ${col.title} (${col.type})
+                    ${getTypeIcon(col.type)} ${col.title}
                 </option>
             `;
         });
@@ -317,7 +418,7 @@ function renderColumnList(columns, css) {
             if (col.type !== 'mirror') {
                 const option = document.createElement('option');
                 option.value = col.id;
-                option.text = `${getTypeIcon(col.type)} ${col.title} (${col.type})`;
+                option.text = `${getTypeIcon(col.type)} ${col.title}`;
                 mondayColumn.appendChild(option);
             }
         });
