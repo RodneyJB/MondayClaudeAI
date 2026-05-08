@@ -142,16 +142,12 @@ namespace MondayClaudeAI.Controllers
     <div style='margin-top:15px; border-top:1px solid #eee; padding-top:15px;'>
         <button onclick='loadSampleItems()'>Load Sample Items</button>
         <div id='sampleBox' style='display:none; margin-top:10px;'>
-            <p style='margin:0 0 8px 0; color:#555; font-size:13px;'>Click a row to see all column values.</p>
+            <p style='margin:0 0 8px 0; color:#555; font-size:13px;'>Click a row to populate column values.</p>
             <div style='overflow-x:auto'>
                 <table class='sample-table' id='sampleTable'>
                     <thead id='sampleHead'></thead>
                     <tbody id='sampleBody'></tbody>
                 </table>
-            </div>
-            <div id='columnValueView' style='margin-top:15px; display:none'>
-                <h3>Selected Item Column Values</h3>
-                <div id='columnValueGrid'></div>
             </div>
         </div>
     </div>
@@ -272,21 +268,19 @@ namespace MondayClaudeAI.Controllers
             r.classList.toggle('selected-row', i === idx);
         });
 
-        // build column value detail grid
-        let html = `<div style='display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;'>`;
+        // populate column values into the board structure list
         allColumns.forEach(col => {
+            const el = document.getElementById('col-val-' + col.id);
+            if (!el) return;
             const cv = item.column_values.find(v => v.id === col.id);
-            const val = cv ? (cv.text || '<em style=""color:#aaa"">empty</em>') : '<em style=""color:#aaa"">empty</em>';
-            html += `
-                <div class='item'>
-                    <div style='font-size:12px;color:#555'>${getTypeIcon(col.type)} ${col.title}</div>
-                    <div style='margin-top:2px'>${val}</div>
-                </div>`;
+            const val = cv ? (cv.text || '') : '';
+            el.innerText = val;
+            el.title = val;
         });
-        html += '</div>';
 
-        document.getElementById('columnValueGrid').innerHTML = html;
-        document.getElementById('columnValueView').style.display = 'block';
+        // also show the name
+        const nameEl = document.getElementById('col-val-name');
+        if (nameEl) nameEl.innerText = item.name;
     }
 
     async function loadBoard() {
@@ -368,8 +362,9 @@ function renderColumnList(columns, css) {
 
     columns.forEach(col => {
         html += `
-            <div class='item ${css}'>
-                <strong>${col.title}</strong><br>
+            <div class='item ${css}' id='col-item-${col.id}'>
+                <strong>${col.title}</strong>
+                <span id='col-val-${col.id}' style='float:right;font-size:12px;color:#374151;max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'></span><br>
                 <span class='type-badge'>
                     ${getTypeIcon(col.type)} ${col.type}
                 </span>
