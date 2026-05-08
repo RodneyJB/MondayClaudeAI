@@ -1,11 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "9e1e+5PBbuc=",
+  "dgSpecHash": "2dwZoiSL5LY=",
   "success": true,
   "projectFilePath": "Z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj",
-  "expectedPackageFiles": [
-    "C:\\Users\\rodney\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.3\\microsoft.aspnetcore.openapi.10.0.3.nupkg.sha512",
-    "C:\\Users\\rodney\\.nuget\\packages\\microsoft.openapi\\2.0.0\\microsoft.openapi.2.0.0.nupkg.sha512"
-  ],
+  "expectedPackageFiles": [],
   "logs": []
 }
