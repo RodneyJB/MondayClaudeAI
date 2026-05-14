@@ -803,54 +803,95 @@ namespace MondayClaudeAI.Controllers
         const relations = columns.filter(c => c.type === 'board_relation');
         const mirrors = columns.filter(c => c.type === 'mirror');
 
-        // Parse each mirror's settings_str to find its parent board_relation column id
-        const mirrorParent = {}; // mirrorColId -> boardRelationColId
+        // Parse settings to map mirrors to their parent board_relation and get board IDs
+        const relationBoardIds = {}; // relColId -> board info
+        const mirrorInfo = {}; // mirrorColId -> { parentRelId, boardId }
+
+        relations.forEach(rel => {
+            try {
+                const s = JSON.parse(rel.settings_str || '{}');
+                const boardId = s.linkedBoardIds ? s.linkedBoardIds[0] : (s.board_id || null);
+                relationBoardIds[rel.id] = { boardId, title: rel.title };
+            } catch {
+                relationBoardIds[rel.id] = { boardId: null, title: rel.title };
+            }
+        });
+
         mirrors.forEach(m => {
             try {
                 const s = JSON.parse(m.settings_str || '{}');
                 const parentId = s.boardRelationColumnId || s.relation_column_id || null;
-                mirrorParent[m.id] = parentId;
-            } catch { mirrorParent[m.id] = null; }
+                mirrorInfo[m.id] = { 
+                    parentRelId: parentId,
+                    boardId: relationBoardIds[parentId]?.boardId || null
+                };
+            } catch {
+                mirrorInfo[m.id] = { parentRelId: null, boardId: null };
+            }
         });
 
         document.getElementById('directColumns').innerHTML = renderColumnList(direct, 'normal', selectedSampleItem);
 
-        // Build connected+mirror grouped HTML
+        // Group relations and their mirrors by board ID
         let html = '';
         const usedMirrors = new Set();
+        const groupedByBoard = {};
 
         relations.forEach(rel => {
-            const value = getColumnDisplayValue(selectedSampleItem, rel);
-            const safeValue = escapeHtml(value);
-            html += `<div class='item relation' id='col-item-${rel.id}' style='margin-bottom:4px;'>
-                <strong>${rel.title}</strong>
-                <div id='col-val-${rel.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span class=""empty-value"">(empty)</span>'}</div>
-                <span class='type-badge'>${getTypeIcon(rel.type)} ${rel.type}</span>
-            </div>`;
+            const boardKey = relationBoardIds[rel.id].boardId || 'unknown';
+            if (!groupedByBoard[boardKey]) {
+                groupedByBoard[boardKey] = { relation: rel, mirrors: [] };
+            }
+            groupedByBoard[boardKey].relation = rel;
+        });
 
-            const childMirrors = mirrors.filter(m => mirrorParent[m.id] === rel.id);
-            if (childMirrors.length > 0) {
-                html += `<div style='margin-left:16px; border-left:2px solid #e2e8f0; padding-left:10px; margin-bottom:10px;'>`;
-                childMirrors.forEach(m => {
-                    usedMirrors.add(m.id);
-                    const mv = getColumnDisplayValue(selectedSampleItem, m);
-                    const smv = escapeHtml(mv);
-                    html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
-                        <strong>${m.title}</strong>
-                        <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
-                        <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
-                    </div>`;
-                });
-                html += '</div>';
-            } else {
-                html += '<div style=""margin-bottom:12px;""></div>';
+        mirrors.forEach(m => {
+            const parentId = mirrorInfo[m.id].parentRelId;
+            if (parentId && relationBoardIds[parentId]) {
+                const boardKey = relationBoardIds[parentId].boardId || 'unknown';
+                if (!groupedByBoard[boardKey]) {
+                    groupedByBoard[boardKey] = { relation: null, mirrors: [] };
+                }
+                groupedByBoard[boardKey].mirrors.push(m);
+                usedMirrors.add(m.id);
             }
         });
 
-        // Orphaned mirrors not linked to any known relation
+        // Render each board group
+        Object.keys(groupedByBoard).sort().forEach(boardKey => {
+            const group = groupedByBoard[boardKey];
+            if (group.relation) {
+                const value = getColumnDisplayValue(selectedSampleItem, group.relation);
+                const safeValue = escapeHtml(value);
+                html += `<div style='margin-bottom:12px; padding:8px; background:#f8fafc; border-radius:6px;'>
+                    <div style='font-weight:600; color:#1e293b; margin-bottom:6px; font-size:13px;'>${group.relation.title}</div>
+                    <div class='item relation' id='col-item-${group.relation.id}' style='margin-bottom:6px;'>
+                        <strong>${group.relation.title}</strong>
+                        <div id='col-val-${group.relation.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span class=""empty-value"">(empty)</span>'}</div>
+                        <span class='type-badge'>${getTypeIcon(group.relation.type)} board_relation</span>
+                    </div>`;
+                    
+                if (group.mirrors.length > 0) {
+                    html += `<div style='margin-left:12px; border-left:2px solid #cbd5e1; padding-left:10px; margin-top:6px;'>`;
+                    group.mirrors.forEach(m => {
+                        const mv = getColumnDisplayValue(selectedSampleItem, m);
+                        const smv = escapeHtml(mv);
+                        html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
+                            <strong>${m.title}</strong>
+                            <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
+                            <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
+        });
+
+        // Orphaned mirrors not linked to any board_relation
         const orphans = mirrors.filter(m => !usedMirrors.has(m.id));
         if (orphans.length > 0) {
-            html += `<div style='margin-top:8px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:11px; color:#94a3b8; margin-bottom:4px;'>Other mirror columns</div>`;
+            html += `<div style='margin-top:8px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:11px; color:#94a3b8; margin-bottom:4px;'>Unlinked mirror columns</div>`;
             html += renderColumnList(orphans, 'mirror', selectedSampleItem);
         }
 
