@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Linq;
 
 namespace MondayClaudeAI.Services;
 
@@ -76,6 +77,58 @@ public class MondayService
                                     id
                                     name
                                 }}
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}";
+
+        var body = JsonSerializer.Serialize(new { query });
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://api.monday.com/v2");
+        request.Headers.Add("Authorization", token);
+        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+
+        var response = await _http.SendAsync(request);
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    public async Task<string> GetOriginValues(long boardId, IEnumerable<long> itemIds, IEnumerable<string> columnIds, string token)
+    {
+        var safeItemIds = itemIds?.Distinct().ToArray() ?? Array.Empty<long>();
+        var safeColumnIds = columnIds?
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray() ?? Array.Empty<string>();
+
+        var itemList = string.Join(",", safeItemIds);
+        var colList = string.Join(",", safeColumnIds.Select(id => $"\"{id.Replace("\\", "\\\\").Replace("\"", "\\\"")}\""));
+
+        var query = $@"
+        {{
+            boards(ids: {boardId}) {{
+                id
+                items(ids: [{itemList}]) {{
+                    id
+                    name
+                    column_values(ids: [{colList}]) {{
+                        id
+                        type
+                        text
+                        value
+                        ... on FormulaValue {{
+                            display_value
+                        }}
+                        ... on MirrorValue {{
+                            display_value
+                        }}
+                        ... on BoardRelationValue {{
+                            display_value
+                            linked_items {{
+                                id
+                                name
                             }}
                         }}
                     }}
