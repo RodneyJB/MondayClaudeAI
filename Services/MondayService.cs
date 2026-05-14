@@ -72,6 +72,15 @@ public class MondayService
                                     name
                                 }}
                             }}
+                            ... on FormulaValue {{
+                                display_value
+                            }}
+                            ... on RollupValue {{
+                                display_value
+                            }}
+                            ... on LookupValue {{
+                                display_value
+                            }}
                         }}
                     }}
                 }}
