@@ -474,9 +474,77 @@ namespace MondayClaudeAI.Controllers
         'If mirror column contains value'
     ];
 
+    function normalizeBoardId(value) {
+        if (value == null) return null;
+        var str = String(value).trim();
+        if (!str) return null;
+        var digits = str.replace(/[^0-9]/g, '');
+        return digits || null;
+    }
+
+    function extractBoardId(payload) {
+        if (!payload) return null;
+
+        // common monday sdk shapes
+        var id =
+            payload.boardId ||
+            payload.board_id ||
+            (payload.board && payload.board.id) ||
+            (payload.boards && payload.boards[0] && payload.boards[0].id) ||
+            (payload.boardIds && payload.boardIds[0]) ||
+            (payload.board_ids && payload.board_ids[0]) ||
+            null;
+
+        if (id) return normalizeBoardId(id);
+
+        // sometimes context is nested in payload.data
+        if (payload.data && payload.data !== payload) {
+            return extractBoardId(payload.data);
+        }
+
+        return null;
+    }
+
+    function extractBoardIdFromUrl() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+
+            var direct =
+                params.get('boardId') ||
+                params.get('board_id') ||
+                params.get('boardIds') ||
+                params.get('board_ids');
+
+            if (direct) {
+                // handle list-like values too
+                var first = String(direct).split(',')[0];
+                var normalized = normalizeBoardId(first);
+                if (normalized) return normalized;
+            }
+
+            // monday often sends encoded context in query param
+            var encodedContext = params.get('context');
+            if (encodedContext) {
+                try {
+                    var decoded = atob(encodedContext);
+                    var obj = JSON.parse(decoded);
+                    var fromContext = extractBoardId(obj);
+                    if (fromContext) return fromContext;
+                } catch (e) {
+                    // ignore decode failures
+                }
+            }
+        } catch (e) {
+            // ignore url parsing failures
+        }
+
+        return null;
+    }
+
     function applyBoardId(id) {
-        if (!id || id === boardId) return;
-        boardId = id;
+        var normalized = normalizeBoardId(id);
+        if (!normalized || normalized === boardId) return;
+        boardId = normalized;
         document.getElementById('boardIdText').innerText = boardId;
         document.getElementById('manualBoardId').value = boardId;
         loadBoard();
@@ -484,13 +552,15 @@ namespace MondayClaudeAI.Controllers
 
     // monday.listen fires when context is ready inside the iframe
     monday.listen('context', function(res) {
-        applyBoardId(res.data && res.data.boardId);
+        var id = extractBoardId(res);
+        applyBoardId(id);
+        document.getElementById('contextHidden').innerText = JSON.stringify(res, null, 2);
     });
 
     // Also poll monday.get('context') with retries - SDK sometimes needs a moment
     function pollContext(attempts) {
         monday.get('context').then(function(res) {
-            var id = res.data && res.data.boardId;
+            var id = extractBoardId(res);
             if (id) {
                 applyBoardId(id);
             } else if (attempts > 0) {
@@ -498,9 +568,16 @@ namespace MondayClaudeAI.Controllers
             } else {
                 document.getElementById('boardIdText').innerText = 'Not detected - enter ID manually';
             }
+            document.getElementById('contextHidden').innerText = JSON.stringify(res, null, 2);
         }).catch(function() {
             if (attempts > 0) setTimeout(function() { pollContext(attempts - 1); }, 800);
         });
+    }
+
+    // immediate URL fallback for cases where sdk context is delayed/missing
+    var urlBoardId = extractBoardIdFromUrl();
+    if (urlBoardId) {
+        applyBoardId(urlBoardId);
     }
 
     // Start polling after a short delay to let the SDK initialise
@@ -651,6 +728,12 @@ namespace MondayClaudeAI.Controllers
         try {
             const response = await fetch('/test-columns/' + boardId);
             const data = await response.json();
+
+            if (!response.ok || data.errors || !data.data || !data.data.boards || !data.data.boards[0]) {
+                document.getElementById('boardIdText').innerText = 'Board load failed';
+                if (btn) { btn.innerText = '↺ Load Board'; btn.disabled = false; }
+                return;
+            }
 
             allColumns = data.data.boards[0].columns;
 
