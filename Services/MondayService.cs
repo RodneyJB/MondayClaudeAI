@@ -151,8 +151,19 @@ public class MondayService
         public long BoardId { get; set; }
         public long ItemId { get; set; }
         public string ColumnId { get; set; } = string.Empty;
+        public string ColumnTitle { get; set; } = string.Empty;
         public string ColumnType { get; set; } = string.Empty;
         public string Value { get; set; } = string.Empty;
+        public List<ResolutionHop> Trail { get; set; } = new();
+    }
+
+    public sealed class ResolutionHop
+    {
+        public long BoardId { get; set; }
+        public long ItemId { get; set; }
+        public string ColumnId { get; set; } = string.Empty;
+        public string ColumnTitle { get; set; } = string.Empty;
+        public string ColumnType { get; set; } = string.Empty;
     }
 
     public sealed class MirrorColumnResolved
@@ -172,6 +183,7 @@ public class MondayService
     private sealed class ColumnMeta
     {
         public string Id { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public string SettingsStr { get; set; } = string.Empty;
         public string SettingsJson { get; set; } = string.Empty;
@@ -261,6 +273,7 @@ public class MondayService
                 result[id] = new ColumnMeta
                 {
                     Id = id,
+                    Title = col.TryGetProperty("title", out var titleEl) ? (titleEl.GetString() ?? string.Empty) : string.Empty,
                     Type = col.TryGetProperty("type", out var tEl) ? (tEl.GetString() ?? string.Empty) : string.Empty,
                     SettingsStr = col.TryGetProperty("settings_str", out var sEl) ? (sEl.GetString() ?? string.Empty) : string.Empty,
                     SettingsJson = NormalizeSettingsJson(col)
@@ -529,7 +542,8 @@ public class MondayService
         string token,
         Dictionary<long, Dictionary<string, ColumnMeta>> columnCache,
         Dictionary<string, ItemData> itemCache,
-        HashSet<string> path)
+        HashSet<string> path,
+        List<ResolutionHop> trail)
     {
         var nodeKey = $"{boardId}:{itemId}:{columnId}";
         if (path.Contains(nodeKey))
@@ -545,6 +559,18 @@ public class MondayService
             {
                 return new List<OriginResolvedValue>();
             }
+
+            var currentTrail = new List<ResolutionHop>(trail)
+            {
+                new ResolutionHop
+                {
+                    BoardId = boardId,
+                    ItemId = itemId,
+                    ColumnId = columnId,
+                    ColumnTitle = meta.Title,
+                    ColumnType = meta.Type
+                }
+            };
 
             var item = await GetItemData(boardId, itemId, token, itemCache);
             if (item == null)
@@ -562,8 +588,10 @@ public class MondayService
                         BoardId = boardId,
                         ItemId = itemId,
                         ColumnId = columnId,
+                        ColumnTitle = meta.Title,
                         ColumnType = meta.Type,
-                        Value = PickBestValue(cv)
+                        Value = PickBestValue(cv),
+                        Trail = currentTrail
                     }
                 };
             }
@@ -586,8 +614,10 @@ public class MondayService
                         BoardId = boardId,
                         ItemId = itemId,
                         ColumnId = columnId,
+                        ColumnTitle = meta.Title,
                         ColumnType = meta.Type,
-                        Value = PickBestValue(mirrorCv)
+                        Value = PickBestValue(mirrorCv),
+                        Trail = currentTrail
                     }
                 };
             }
@@ -602,8 +632,10 @@ public class MondayService
                         BoardId = boardId,
                         ItemId = itemId,
                         ColumnId = columnId,
+                        ColumnTitle = meta.Title,
                         ColumnType = meta.Type,
-                        Value = PickBestValue(mirrorCv)
+                        Value = PickBestValue(mirrorCv),
+                        Trail = currentTrail
                     }
                 };
             }
@@ -622,7 +654,8 @@ public class MondayService
                             token,
                             columnCache,
                             itemCache,
-                            path);
+                            path,
+                            currentTrail);
 
                         if (branch.Count > 0)
                         {
@@ -640,8 +673,10 @@ public class MondayService
                     BoardId = boardId,
                     ItemId = itemId,
                     ColumnId = columnId,
+                    ColumnTitle = meta.Title,
                     ColumnType = meta.Type,
-                    Value = PickBestValue(mirrorCv)
+                    Value = PickBestValue(mirrorCv),
+                    Trail = currentTrail
                 });
             }
 
@@ -715,7 +750,8 @@ public class MondayService
                             token,
                             columnCache,
                             itemCache,
-                            new HashSet<string>(StringComparer.Ordinal));
+                            new HashSet<string>(StringComparer.Ordinal),
+                            new List<ResolutionHop>());
 
                         mirrorOut.Origins.AddRange(origins);
                     }
@@ -753,7 +789,8 @@ public class MondayService
             token,
             columnCache,
             itemCache,
-            new HashSet<string>(StringComparer.Ordinal));
+            new HashSet<string>(StringComparer.Ordinal),
+            new List<ResolutionHop>());
 
         var best = resolved
             .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x.Value) && !string.Equals(x.Value.Trim(), "null", StringComparison.OrdinalIgnoreCase))

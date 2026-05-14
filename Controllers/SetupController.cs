@@ -1070,9 +1070,38 @@ namespace MondayClaudeAI.Controllers
 
             const origins = Array.isArray(row && row.origins) ? row.origins : [];
             if (origins.length > 0) {
+                const preferred = origins.find(o => o && o.value != null && String(o.value).trim() !== '') || origins[0];
+                if (preferred) {
+                    target.dataset.originBoardId = String(preferred.boardId ?? '');
+                    target.dataset.originItemId = String(preferred.itemId ?? '');
+                    target.dataset.originColumnId = String(preferred.columnId ?? '');
+                    target.dataset.originColumnTitle = String(preferred.columnTitle ?? '');
+                }
+
+                const originTitleSet = new Set(
+                    origins
+                        .map(o => String(o && o.columnTitle || '').trim())
+                        .filter(t => t !== '')
+                );
+
+                if (originTitleSet.size > 0) {
+                    const label = document.querySelector(`#col-item-${mirrorId} strong`);
+                    if (label) {
+                        label.textContent = Array.from(originTitleSet).join(' / ');
+                    }
+                }
+
                 const originTrace = origins
                     .filter(o => o)
-                    .map(o => `B:${o.boardId} I:${o.itemId} C:${o.columnId}`)
+                    .map(o => {
+                        const hops = Array.isArray(o.trail) ? o.trail : [];
+                        if (hops.length === 0) {
+                            return `B:${o.boardId} I:${o.itemId} C:${o.columnId}`;
+                        }
+                        return hops
+                            .map(h => `B:${h.boardId} I:${h.itemId} C:${h.columnId}`)
+                            .join(' -> ');
+                    })
                     .slice(0, 12)
                     .join(' | ');
                 if (originTrace) {
