@@ -189,9 +189,10 @@ namespace MondayClaudeAI.Controllers
     <!-- TOP BAR -->
     <div id='topbar'>
         <h1 id='page-title'>New AI Task</h1>
-        <div class='board-info'>
+        <div class='board-info' style='display:flex; align-items:center; gap:8px; flex-wrap:wrap;'>
             Board ID: <strong id='boardIdText'>Loading...</strong>
-            <button onclick='loadBoard()' style='padding:5px 12px; font-size:12px; margin:0;'>↺ Load Board</button>
+            <input id='manualBoardId' placeholder='or enter board ID...' style='width:160px; padding:4px 8px; font-size:12px; margin:0; border:1px solid #d1d5db; border-radius:5px;' onkeydown='if(event.key==''Enter''){manualLoad();}'>
+            <button onclick='manualLoad()' style='padding:5px 12px; font-size:12px; margin:0;'>&#8635; Load Board</button>
         </div>
     </div>
 
@@ -473,27 +474,49 @@ namespace MondayClaudeAI.Controllers
         'If mirror column contains value'
     ];
 
-    monday.listen('context', function(res) {
-        boardId = res.data.boardId;
-        document.getElementById('boardIdText').innerText = boardId;
-        document.getElementById('contextHidden').innerText = JSON.stringify(res.data, null, 2);
-        // auto-load board columns as soon as we have the board ID
-        loadBoard();
-    });
+    // Try monday.get first (reliable), fall back to listen
+    function initContext() {
+        monday.get('context').then(function(res) {
+            var id = res.data && res.data.boardId;
+            if (id) {
+                boardId = id;
+                document.getElementById('boardIdText').innerText = boardId;
+                document.getElementById('manualBoardId').value = boardId;
+                loadBoard();
+            }
+        }).catch(function() {});
 
+        monday.listen('context', function(res) {
+            var id = res.data && res.data.boardId;
+            if (id && id !== boardId) {
+                boardId = id;
+                document.getElementById('boardIdText').innerText = boardId;
+                document.getElementById('manualBoardId').value = boardId;
+                loadBoard();
+            }
+        });
+    }
+
+    initContext();
     fillStaticDropdowns();
     addMappingRow();
 
     function fillStaticDropdowns() {
-        const trigger = document.getElementById('triggerType');
-        const condition = document.getElementById('conditionType');
+        var trigger = document.getElementById('triggerType');
+        var condition = document.getElementById('conditionType');
 
-        triggerTypes.forEach(t => {
-            trigger.innerHTML += `<option value='${t}'>${t}</option>`;
+        triggerTypes.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t;
+            opt.text = t;
+            trigger.appendChild(opt);
         });
 
-        conditionTypes.forEach(c => {
-            condition.innerHTML += `<option value='${c}'>${c}</option>`;
+        conditionTypes.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c;
+            opt.text = c;
+            condition.appendChild(opt);
         });
     }
 
@@ -598,10 +621,20 @@ namespace MondayClaudeAI.Controllers
         renderColumnGroups(allColumns);
     }
 
+    function manualLoad() {
+        var val = document.getElementById('manualBoardId').value.trim();
+        if (val) {
+            boardId = val;
+            document.getElementById('boardIdText').innerText = boardId;
+        }
+        loadBoard();
+    }
+
     async function loadBoard() {
         if (boardId == null) {
-            document.getElementById('boardIdText').innerText = 'Waiting for board...';
-            return;
+            var val = document.getElementById('manualBoardId').value.trim();
+            if (val) { boardId = val; document.getElementById('boardIdText').innerText = boardId; }
+            else { document.getElementById('boardIdText').innerText = 'No board ID - enter one above'; return; }
         }
 
         const btn = document.querySelector('#topbar button');
