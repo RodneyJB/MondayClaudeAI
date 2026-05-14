@@ -1009,99 +1009,77 @@ namespace MondayClaudeAI.Controllers
     async function enrichMirrorValuesFromOrigin(columns) {
         if (!selectedSampleItem || !columns || columns.length === 0) return;
 
-        const relations = columns.filter(c => c.type === 'board_relation');
         const mirrors = columns.filter(c => c.type === 'mirror');
-        if (relations.length === 0 || mirrors.length === 0) return;
+        if (mirrors.length === 0) return;
 
+        const relations = columns.filter(c => c.type === 'board_relation');
         const relationIdSet = new Set(relations.map(r => String(r.id)));
 
-        const mirrorPlan = [];
-        const queryByBoard = {};
-
-        mirrors.forEach(mirrorCol => {
+        for (const mirrorCol of mirrors) {
             const mirrorSettings = safeParseSettings(mirrorCol.settings, mirrorCol.settings_str);
             const parentRelId = extractParentRelationId(mirrorSettings, relationIdSet);
-            if (!parentRelId) return;
+            if (!parentRelId) continue;
 
             const linkedItemIds = getLinkedItemIdsForRelation(selectedSampleItem, parentRelId);
-            if (linkedItemIds.length === 0) return;
+            if (linkedItemIds.length === 0) continue;
 
             const originSpecs = getMirrorOriginSpecs(mirrorCol);
-            if (originSpecs.length === 0) return;
+            if (originSpecs.length === 0) continue;
 
-            mirrorPlan.push({ mirrorId: String(mirrorCol.id), linkedItemIds, originSpecs });
+            // For each origin spec (origin board/column), resolve the value through the mirror chain
+            const values = [];
+            for (const spec of originSpecs) {
+                for (const linkedItemId of linkedItemIds) {
+                    for (const colId of spec.columnIds) {
+                        const cacheKey = `${spec.boardId}|${linkedItemId}|${colId}`;
+                        
+                        let resolvedValue;
+                        if (originValueCache[cacheKey]) {
+                            resolvedValue = originValueCache[cacheKey];
+                        } else {
+                            try {
+                                const response = await fetch('/resolve-origin-value', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        boardId: spec.boardId,
+                                        itemId: linkedItemId,
+                                        columnId: colId,
+                                        columnSettings: mirrorSettings
+                                    })
+                                });
 
-            originSpecs.forEach(spec => {
-                if (!queryByBoard[spec.boardId]) {
-                    queryByBoard[spec.boardId] = { itemIds: new Set(), columnIds: new Set() };
-                }
-                linkedItemIds.forEach(id => queryByBoard[spec.boardId].itemIds.add(String(id)));
-                spec.columnIds.forEach(cid => queryByBoard[spec.boardId].columnIds.add(String(cid)));
-            });
-        });
+                                if (response.ok) {
+                                    const result = await response.json();
+                                    resolvedValue = result.value;
+                                    originValueCache[cacheKey] = resolvedValue;
+                                } else {
+                                    console.warn(`Failed to resolve origin value for board ${spec.boardId}, item ${linkedItemId}, column ${colId}`);
+                                }
+                            } catch (e) {
+                                console.warn('Origin value resolution failed', e);
+                            }
+                        }
 
-        const boardIds = Object.keys(queryByBoard);
-        for (const bid of boardIds) {
-            const itemIds = Array.from(queryByBoard[bid].itemIds);
-            const columnIds = Array.from(queryByBoard[bid].columnIds);
-            if (itemIds.length === 0 || columnIds.length === 0) continue;
-
-            const cacheKey = `${bid}|${itemIds.slice().sort().join(',')}|${columnIds.slice().sort().join(',')}`;
-
-            let data;
-            if (originValueCache[cacheKey]) {
-                data = originValueCache[cacheKey];
-            } else {
-                try {
-                    data = await fetchOriginValues(bid, itemIds, columnIds);
-                    originValueCache[cacheKey] = data;
-                } catch (e) {
-                    console.warn('Origin fetch failed for board', bid, e);
-                    continue;
+                        if (resolvedValue && String(resolvedValue).trim() !== '' && String(resolvedValue).toLowerCase() !== 'null') {
+                            values.push(String(resolvedValue));
+                        }
+                    }
                 }
             }
 
-            const board = data && data.data && data.data.boards && data.data.boards[0];
-            const items = board && board.items ? board.items : [];
-
-            items.forEach(it => {
-                const itId = String(it.id);
-                (it.column_values || []).forEach(cv => {
-                    const val = extractCvText(cv);
-                    const key = `${bid}|${itId}|${String(cv.id)}`;
-                    if (val && String(val).trim() !== '') {
-                        originValueCache[key] = val;
-                    }
-                });
-            });
+            // Update the mirror column display with resolved values
+            if (values.length > 0) {
+                const uniqueValues = Array.from(new Set(values));
+                const finalValue = uniqueValues.join(', ');
+                const target = document.getElementById('col-val-' + String(mirrorCol.id));
+                if (target) {
+                    target.innerText = finalValue;
+                    target.title = finalValue;
+                    target.style.color = '#0f172a';
+                }
+            }
         }
-
-        mirrorPlan.forEach(plan => {
-            const values = [];
-
-            plan.originSpecs.forEach(spec => {
-                plan.linkedItemIds.forEach(itemId => {
-                    spec.columnIds.forEach(colId => {
-                        const key = `${spec.boardId}|${String(itemId)}|${String(colId)}`;
-                        const v = originValueCache[key];
-                        if (v != null && String(v).trim() !== '' && String(v).toLowerCase() !== 'null') {
-                            values.push(String(v));
-                        }
-                    });
-                });
-            });
-
-            if (values.length === 0) return;
-
-            const uniqueValues = Array.from(new Set(values));
-            const finalValue = uniqueValues.join(', ');
-            const target = document.getElementById('col-val-' + plan.mirrorId);
-            if (!target) return;
-
-            target.innerText = finalValue;
-            target.title = finalValue;
-            target.style.color = '#0f172a';
-        });
     }
 
     function renderColumnGroups(columns) {

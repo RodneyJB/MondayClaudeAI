@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using MondayClaudeAI.Services;
+using System.Text.Json;
 
 namespace MondayClaudeAI.Controllers;
 
@@ -13,6 +14,22 @@ public class TestController : ControllerBase
         public long BoardId { get; set; }
         public List<long> ItemIds { get; set; } = new();
         public List<string> ColumnIds { get; set; } = new();
+    }
+
+    public class ResolveOriginRequest
+    {
+        public long BoardId { get; set; }
+        public long ItemId { get; set; }
+        public string ColumnId { get; set; } = string.Empty;
+        public Dictionary<string, object>? ColumnSettings { get; set; }
+    }
+
+    public class ResolveOriginResponse
+    {
+        public string Value { get; set; } = string.Empty;
+        public string ColumnType { get; set; } = string.Empty;
+        public string FinalBoardId { get; set; } = string.Empty;
+        public string FinalColumnId { get; set; } = string.Empty;
     }
 
     public TestController(MondayService monday)
@@ -103,6 +120,60 @@ public class TestController : ControllerBase
         {
             var result = await _monday.GetOriginValues(request.BoardId, request.ItemIds, request.ColumnIds, token);
             return Content(result, "application/json");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                error = ex.Message
+            });
+        }
+    }
+
+    [HttpPost("/resolve-origin-value")]
+    public async Task<IActionResult> ResolveOriginValue([FromBody] ResolveOriginRequest request)
+    {
+        var token = Environment.GetEnvironmentVariable("MONDAY_API_TOKEN");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return StatusCode(500, new
+            {
+                error = "MONDAY_API_TOKEN is missing on the server environment."
+            });
+        }
+
+        if (request == null || request.BoardId <= 0)
+        {
+            return BadRequest(new { error = "boardId is required." });
+        }
+
+        if (request.ItemId <= 0)
+        {
+            return BadRequest(new { error = "itemId is required." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.ColumnId))
+        {
+            return BadRequest(new { error = "columnId is required." });
+        }
+
+        try
+        {
+            var (value, columnType, finalBoardId, finalColumnId) = await _monday.ResolveToOriginValue(
+                request.BoardId,
+                request.ItemId,
+                request.ColumnId,
+                request.ColumnSettings,
+                token
+            );
+
+            return Ok(new ResolveOriginResponse
+            {
+                Value = value,
+                ColumnType = columnType,
+                FinalBoardId = finalBoardId,
+                FinalColumnId = finalColumnId
+            });
         }
         catch (Exception ex)
         {
