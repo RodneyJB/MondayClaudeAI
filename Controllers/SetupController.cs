@@ -803,89 +803,71 @@ namespace MondayClaudeAI.Controllers
         const relations = columns.filter(c => c.type === 'board_relation');
         const mirrors = columns.filter(c => c.type === 'mirror');
 
-        // Parse settings to map mirrors to their parent board_relation and get board IDs
-        const relationBoardIds = {}; // relColId -> board info
-        const mirrorInfo = {}; // mirrorColId -> { parentRelId, boardId }
+        // Parse settings to map mirrors to their parent board_relation
+        const relationInfo = {}; // relColId -> { title, settings_str }
+        const mirrorInfo = {}; // mirrorColId -> parentRelId
 
         relations.forEach(rel => {
-            try {
-                const s = JSON.parse(rel.settings_str || '{}');
-                const boardId = s.linkedBoardIds ? s.linkedBoardIds[0] : (s.board_id || null);
-                relationBoardIds[rel.id] = { boardId, title: rel.title };
-            } catch {
-                relationBoardIds[rel.id] = { boardId: null, title: rel.title };
-            }
+            relationInfo[rel.id] = { title: rel.title, settings_str: rel.settings_str };
         });
 
         mirrors.forEach(m => {
             try {
                 const s = JSON.parse(m.settings_str || '{}');
-                const parentId = s.boardRelationColumnId || s.relation_column_id || null;
-                mirrorInfo[m.id] = { 
-                    parentRelId: parentId,
-                    boardId: relationBoardIds[parentId]?.boardId || null
-                };
+                // Try multiple possible field names for the parent relation column ID
+                const parentId = s.boardRelationColumnId || s.relation_column_id || s.relationColumnId || null;
+                mirrorInfo[m.id] = parentId;
             } catch {
-                mirrorInfo[m.id] = { parentRelId: null, boardId: null };
+                mirrorInfo[m.id] = null;
             }
         });
 
         document.getElementById('directColumns').innerHTML = renderColumnList(direct, 'normal', selectedSampleItem);
 
-        // Group relations and their mirrors by board ID
+        // Group relations and their mirrors by relation column ID (not board ID)
         let html = '';
         const usedMirrors = new Set();
-        const groupedByBoard = {};
+        const groupedByRelation = {};
 
-        relations.forEach(rel => {
-            const boardKey = relationBoardIds[rel.id].boardId || 'unknown';
-            if (!groupedByBoard[boardKey]) {
-                groupedByBoard[boardKey] = { relation: rel, mirrors: [] };
-            }
-            groupedByBoard[boardKey].relation = rel;
-        });
-
+        // First, group mirrors by their parent relation
         mirrors.forEach(m => {
-            const parentId = mirrorInfo[m.id].parentRelId;
-            if (parentId && relationBoardIds[parentId]) {
-                const boardKey = relationBoardIds[parentId].boardId || 'unknown';
-                if (!groupedByBoard[boardKey]) {
-                    groupedByBoard[boardKey] = { relation: null, mirrors: [] };
+            const parentId = mirrorInfo[m.id];
+            if (parentId && relationInfo[parentId]) {
+                if (!groupedByRelation[parentId]) {
+                    groupedByRelation[parentId] = [];
                 }
-                groupedByBoard[boardKey].mirrors.push(m);
+                groupedByRelation[parentId].push(m);
                 usedMirrors.add(m.id);
             }
         });
 
-        // Render each board group
-        Object.keys(groupedByBoard).sort().forEach(boardKey => {
-            const group = groupedByBoard[boardKey];
-            if (group.relation) {
-                const value = getColumnDisplayValue(selectedSampleItem, group.relation);
-                const safeValue = escapeHtml(value);
-                html += `<div style='margin-bottom:12px; padding:8px; background:#f8fafc; border-radius:6px;'>
-                    <div style='font-weight:600; color:#1e293b; margin-bottom:6px; font-size:13px;'>${group.relation.title}</div>
-                    <div class='item relation' id='col-item-${group.relation.id}' style='margin-bottom:6px;'>
-                        <strong>${group.relation.title}</strong>
-                        <div id='col-val-${group.relation.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span class=""empty-value"">(empty)</span>'}</div>
-                        <span class='type-badge'>${getTypeIcon(group.relation.type)} board_relation</span>
+        // Render each relation with its grouped mirrors
+        relations.forEach(rel => {
+            const value = getColumnDisplayValue(selectedSampleItem, rel);
+            const safeValue = escapeHtml(value);
+            html += `<div style='margin-bottom:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;'>
+                <div style='font-weight:600; color:#1e293b; margin-bottom:8px; font-size:13px;'>${rel.title}</div>
+                <div class='item relation' id='col-item-${rel.id}' style='margin-bottom:8px;'>
+                    <strong>${rel.title}</strong>
+                    <div id='col-val-${rel.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span class=""empty-value"">(empty)</span>'}</div>
+                    <span class='type-badge'>${getTypeIcon(rel.type)} board_relation</span>
+                </div>`;
+                
+            const childMirrors = groupedByRelation[rel.id] || [];
+            if (childMirrors.length > 0) {
+                html += `<div style='margin-left:12px; border-left:2px solid #cbd5e1; padding-left:10px;'>`;
+                childMirrors.forEach(m => {
+                    const mv = getColumnDisplayValue(selectedSampleItem, m);
+                    const smv = escapeHtml(mv);
+                    html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
+                        <strong>${m.title}</strong>
+                        <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
+                        <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
                     </div>`;
-                    
-                if (group.mirrors.length > 0) {
-                    html += `<div style='margin-left:12px; border-left:2px solid #cbd5e1; padding-left:10px; margin-top:6px;'>`;
-                    group.mirrors.forEach(m => {
-                        const mv = getColumnDisplayValue(selectedSampleItem, m);
-                        const smv = escapeHtml(mv);
-                        html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
-                            <strong>${m.title}</strong>
-                            <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
-                            <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
-                        </div>`;
-                    });
-                    html += '</div>';
-                }
+                });
                 html += '</div>';
             }
+            html += '</div>';
         });
 
         // Orphaned mirrors not linked to any board_relation
@@ -957,6 +939,13 @@ namespace MondayClaudeAI.Controllers
 
         const cv = item.column_values.find(v => v.id === col.id);
         if (!cv) return '';
+
+        // For formula and mirror columns, prioritize text
+        if (col.type === 'formula' || col.type === 'mirror') {
+            if (cv.text && cv.text.trim() !== '') {
+                return cv.text;
+            }
+        }
 
         if (cv.display_value && cv.display_value.trim() !== '') {
             return cv.display_value;
