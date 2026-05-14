@@ -325,6 +325,16 @@ namespace MondayClaudeAI.Controllers
     let savedSetups = JSON.parse(localStorage.getItem('claudeAiSetups') || '[]');
     let editingSetupId = null;
 
+    function isMirrorLike(col) {
+        const t = String(col && col.type || '').toLowerCase();
+        return t === 'mirror' || t === 'lookup';
+    }
+
+    function isRelationLike(col) {
+        const t = String(col && col.type || '').toLowerCase();
+        return t === 'board_relation' || t === 'connect_boards';
+    }
+
     renderSidebarList();
 
     function renderSidebarList() {
@@ -685,7 +695,7 @@ namespace MondayClaudeAI.Controllers
 
         // Build header from columns (show first 8 non-mirror columns for readability)
         const visibleCols = allColumns
-            .filter(c => c.type !== 'mirror' && c.type !== 'board_relation')
+            .filter(c => !isMirrorLike(c) && !isRelationLike(c))
             .slice(0, 8);
 
         let headHtml = '<tr><th>#</th><th>Board ID</th><th>Item ID</th><th>Name</th>';
@@ -1009,7 +1019,7 @@ namespace MondayClaudeAI.Controllers
     async function enrichMirrorValuesFromOrigin(columns) {
         if (!selectedSampleItem || !columns || columns.length === 0) return;
 
-        const mirrors = columns.filter(c => c.type === 'mirror');
+        const mirrors = columns.filter(c => isMirrorLike(c));
         if (mirrors.length === 0) return;
 
         const selectedBoardId = Number(boardId);
@@ -1073,9 +1083,9 @@ namespace MondayClaudeAI.Controllers
     }
 
     async function renderColumnGroups(columns) {
-        const direct = columns.filter(c => c.type !== 'mirror' && c.type !== 'board_relation');
-        const relations = columns.filter(c => c.type === 'board_relation');
-        const mirrors = columns.filter(c => c.type === 'mirror');
+        const direct = columns.filter(c => !isMirrorLike(c) && !isRelationLike(c));
+        const relations = columns.filter(c => isRelationLike(c));
+        const mirrors = columns.filter(c => isMirrorLike(c));
 
         const selectedItemId = selectedSampleItem && selectedSampleItem.id ? String(selectedSampleItem.id) : '-';
         const currentBoardId = boardId ? String(boardId) : '-';
@@ -1118,8 +1128,11 @@ namespace MondayClaudeAI.Controllers
                 const origins = Array.isArray(row && row.origins) ? row.origins : [];
                 if (!mirrorId || origins.length === 0) return;
 
-                const isRelationLike = origins.some(origin => String(origin && origin.columnType || '').toLowerCase() === 'board_relation');
-                if (isRelationLike) {
+                const isResolvedRelationLike = origins.some(origin => {
+                    const t = String(origin && origin.columnType || '').toLowerCase();
+                    return t === 'board_relation' || t === 'connect_boards';
+                });
+                if (isResolvedRelationLike) {
                     relationLikeMirrorIds.add(mirrorId);
                 }
             });
@@ -1426,7 +1439,7 @@ namespace MondayClaudeAI.Controllers
         return ids.some(id => {
             const ref = byId.get(id);
             if (!ref) return id.startsWith('lookup_') || id.startsWith('board_relation_');
-            return ref.type === 'mirror' || ref.type === 'board_relation';
+            return isMirrorLike(ref) || isRelationLike(ref);
         });
     }
 
@@ -1454,7 +1467,7 @@ namespace MondayClaudeAI.Controllers
         }
 
         // Mirror columns often have useful text values
-        if (col.type === 'mirror') {
+        if (isMirrorLike(col)) {
             if (cv.text && cv.text.trim() !== '') {
                 return cv.text;
             }
@@ -1558,7 +1571,7 @@ function renderColumnList(columns, css, selectedItem) {
         select.innerHTML = '';
 
         columns.forEach(col => {
-            if (!includeMirrors && col.type === 'mirror') {
+            if (!includeMirrors && isMirrorLike(col)) {
                 return;
             }
 
@@ -1583,7 +1596,7 @@ function renderColumnList(columns, css, selectedItem) {
         const mondayColumn = document.createElement('select');
 
         allColumns.forEach(col => {
-            if (col.type !== 'mirror') {
+            if (!isMirrorLike(col)) {
                 const option = document.createElement('option');
                 option.value = col.id;
                 option.text = `${getTypeIcon(col.type)} ${col.title}`;

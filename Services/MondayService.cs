@@ -174,6 +174,7 @@ public class MondayService
         public string Id { get; set; } = string.Empty;
         public string Type { get; set; } = string.Empty;
         public string SettingsStr { get; set; } = string.Empty;
+        public string SettingsJson { get; set; } = string.Empty;
     }
 
     private sealed class ItemColumnValue
@@ -200,6 +201,32 @@ public class MondayService
         request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         var response = await _http.SendAsync(request);
         return await response.Content.ReadAsStringAsync();
+    }
+
+    private static bool IsMirrorLikeType(string? type)
+        => string.Equals(type, "mirror", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "lookup", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRelationLikeType(string? type)
+        => string.Equals(type, "board_relation", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "connect_boards", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeSettingsJson(JsonElement col)
+    {
+        var settingsStr = col.TryGetProperty("settings_str", out var sEl) ? (sEl.GetString() ?? string.Empty) : string.Empty;
+        if (!string.IsNullOrWhiteSpace(settingsStr)) return settingsStr;
+
+        if (!col.TryGetProperty("settings", out var settingsEl) || settingsEl.ValueKind == JsonValueKind.Null || settingsEl.ValueKind == JsonValueKind.Undefined)
+        {
+            return string.Empty;
+        }
+
+        if (settingsEl.ValueKind == JsonValueKind.String)
+        {
+            return settingsEl.GetString() ?? string.Empty;
+        }
+
+        return settingsEl.GetRawText();
     }
 
     private async Task<Dictionary<string, ColumnMeta>> GetBoardColumnMetaMap(long boardId, string token, Dictionary<long, Dictionary<string, ColumnMeta>> cache)
@@ -235,7 +262,8 @@ public class MondayService
                 {
                     Id = id,
                     Type = col.TryGetProperty("type", out var tEl) ? (tEl.GetString() ?? string.Empty) : string.Empty,
-                    SettingsStr = col.TryGetProperty("settings_str", out var sEl) ? (sEl.GetString() ?? string.Empty) : string.Empty
+                    SettingsStr = col.TryGetProperty("settings_str", out var sEl) ? (sEl.GetString() ?? string.Empty) : string.Empty,
+                    SettingsJson = NormalizeSettingsJson(col)
                 };
             }
         }
@@ -371,12 +399,12 @@ public class MondayService
         return parsed;
     }
 
-    private static string? ExtractParentRelationIdFromSettings(string settingsStr, HashSet<string> relationIdSet)
+    private static string? ExtractParentRelationIdFromSettings(string settingsJson, HashSet<string> relationIdSet)
     {
-        if (string.IsNullOrWhiteSpace(settingsStr)) return null;
+        if (string.IsNullOrWhiteSpace(settingsJson)) return null;
         try
         {
-            using var doc = JsonDocument.Parse(settingsStr);
+            using var doc = JsonDocument.Parse(settingsJson);
             var root = doc.RootElement;
 
             if (root.TryGetProperty("relation_column", out var relColObj) && relColObj.ValueKind == JsonValueKind.Object)
@@ -433,14 +461,14 @@ public class MondayService
         public List<string> ColumnIds { get; set; } = new();
     }
 
-    private static List<OriginSpec> ExtractOriginSpecsFromSettings(string settingsStr)
+    private static List<OriginSpec> ExtractOriginSpecsFromSettings(string settingsJson)
     {
         var result = new List<OriginSpec>();
-        if (string.IsNullOrWhiteSpace(settingsStr)) return result;
+        if (string.IsNullOrWhiteSpace(settingsJson)) return result;
 
         try
         {
-            using var doc = JsonDocument.Parse(settingsStr);
+            using var doc = JsonDocument.Parse(settingsJson);
             var root = doc.RootElement;
             if (!root.TryGetProperty("displayed_linked_columns", out var list) || list.ValueKind != JsonValueKind.Array)
             {
@@ -524,7 +552,7 @@ public class MondayService
                 return new List<OriginResolvedValue>();
             }
 
-            if (!string.Equals(meta.Type, "mirror", StringComparison.OrdinalIgnoreCase))
+            if (!IsMirrorLikeType(meta.Type))
             {
                 item.Columns.TryGetValue(columnId, out var cv);
                 return new List<OriginResolvedValue>
@@ -541,12 +569,12 @@ public class MondayService
             }
 
             var relationIds = metaMap.Values
-                .Where(x => string.Equals(x.Type, "board_relation", StringComparison.OrdinalIgnoreCase))
+                .Where(x => IsRelationLikeType(x.Type))
                 .Select(x => x.Id)
                 .ToHashSet(StringComparer.Ordinal);
 
-            var parentRelationId = ExtractParentRelationIdFromSettings(meta.SettingsStr, relationIds);
-            var originSpecs = ExtractOriginSpecsFromSettings(meta.SettingsStr);
+            var parentRelationId = ExtractParentRelationIdFromSettings(meta.SettingsJson, relationIds);
+            var originSpecs = ExtractOriginSpecsFromSettings(meta.SettingsJson);
 
             if (string.IsNullOrWhiteSpace(parentRelationId) || originSpecs.Count == 0)
             {
@@ -566,7 +594,18 @@ public class MondayService
 
             if (!item.Columns.TryGetValue(parentRelationId, out var relCv) || relCv.LinkedItemIds.Count == 0)
             {
-                return new List<OriginResolvedValue>();
+                item.Columns.TryGetValue(columnId, out var mirrorCv);
+                return new List<OriginResolvedValue>
+                {
+                    new OriginResolvedValue
+                    {
+                        BoardId = boardId,
+                        ItemId = itemId,
+                        ColumnId = columnId,
+                        ColumnType = meta.Type,
+                        Value = PickBestValue(mirrorCv)
+                    }
+                };
             }
 
             var resolved = new List<OriginResolvedValue>();
@@ -628,20 +667,20 @@ public class MondayService
         }
 
         var relationIds = rootColumns.Values
-            .Where(x => string.Equals(x.Type, "board_relation", StringComparison.OrdinalIgnoreCase))
+            .Where(x => IsRelationLikeType(x.Type))
             .Select(x => x.Id)
             .ToHashSet(StringComparer.Ordinal);
 
         var mirrorCols = rootColumns.Values
-            .Where(x => string.Equals(x.Type, "mirror", StringComparison.OrdinalIgnoreCase))
+            .Where(x => IsMirrorLikeType(x.Type))
             .ToList();
 
         foreach (var mirror in mirrorCols)
         {
             var mirrorOut = new MirrorColumnResolved { MirrorColumnId = mirror.Id };
 
-            var parentRelId = ExtractParentRelationIdFromSettings(mirror.SettingsStr, relationIds);
-            var originSpecs = ExtractOriginSpecsFromSettings(mirror.SettingsStr);
+            var parentRelId = ExtractParentRelationIdFromSettings(mirror.SettingsJson, relationIds);
+            var originSpecs = ExtractOriginSpecsFromSettings(mirror.SettingsJson);
 
             if (string.IsNullOrWhiteSpace(parentRelId) || originSpecs.Count == 0)
             {
@@ -655,6 +694,10 @@ public class MondayService
 
             if (!rootItem.Columns.TryGetValue(parentRelId, out var relCv) || relCv.LinkedItemIds.Count == 0)
             {
+                if (rootItem.Columns.TryGetValue(mirror.Id, out var fallbackCv))
+                {
+                    mirrorOut.Value = PickBestValue(fallbackCv);
+                }
                 result.Mirrors.Add(mirrorOut);
                 continue;
             }

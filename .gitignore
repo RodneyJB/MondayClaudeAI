@@ -1,3 +1,14 @@
 env
 .env
 *.env
+
+# .NET build output
+bin/
+obj/
+
+# User/IDE files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
