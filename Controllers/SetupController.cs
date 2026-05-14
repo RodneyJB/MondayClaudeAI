@@ -877,6 +877,10 @@ namespace MondayClaudeAI.Controllers
         const cv = item.column_values.find(v => v.id === col.id);
         if (!cv) return '';
 
+        if (cv.display_value && cv.display_value.trim() !== '') {
+            return cv.display_value;
+        }
+
         if (cv.text && cv.text.trim() !== '') {
             return cv.text;
         }
@@ -884,8 +888,12 @@ namespace MondayClaudeAI.Controllers
         if (!cv.value) return '';
 
         try {
-            const parsed = JSON.parse(cv.value);
-            return readDynamicValue(parsed);
+            const obj = JSON.parse(cv.value);
+            // For board_relation: linked_items array
+            if (obj && Array.isArray(obj.linkedPulseIds) && cv.linked_items && cv.linked_items.length > 0) {
+                return cv.linked_items.map(i => i.name).join(', ');
+            }
+            return readDynamicValue(obj);
         } catch {
             return cv.value;
         }

@@ -61,6 +61,16 @@ public class MondayService
                             id
                             text
                             value
+                            ... on MirrorValue {{
+                                display_value
+                            }}
+                            ... on BoardRelationValue {{
+                                display_value
+                                linked_items {{
+                                    id
+                                    name
+                                }}
+                            }}
                         }}
                     }}
                 }}
