@@ -120,9 +120,20 @@ namespace MondayClaudeAI.Controllers
 </div>
 
 <div class='box'>
-    <h2>Board Structure</h2>
+    <div style='display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;'>
+        <h2 style='margin:0;'>Board Structure</h2>
+        <div style='display:flex; align-items:center; gap:10px; flex-wrap:wrap;'>
+            <button onclick='loadSampleItems()'>Load Sample Items</button>
+            <div id='itemSelectorWrap' style='display:none; align-items:center; gap:8px;'>
+                <label style='font-size:13px; color:#555; margin:0;'>Select Item:</label>
+                <select id='itemSelector' onchange='selectSampleItemByIndex(this.value)' style='width:auto; min-width:180px; padding:6px 8px; margin:0;'>
+                    <option value=''>-- Choose an item --</option>
+                </select>
+            </div>
+        </div>
+    </div>
 
-    <div class='grid'>
+    <div class='grid' style='margin-top:15px;'>
         <div>
             <h3>Direct Board Columns</h3>
             <div id='directColumns'>Click Load Board Columns</div>
@@ -139,16 +150,13 @@ namespace MondayClaudeAI.Controllers
         </div>
     </div>
 
-    <div style='margin-top:15px; border-top:1px solid #eee; padding-top:15px;'>
-        <button onclick='loadSampleItems()'>Load Sample Items</button>
-        <div id='sampleBox' style='display:none; margin-top:10px;'>
-            <p style='margin:0 0 8px 0; color:#555; font-size:13px;'>Click a row to populate column values.</p>
-            <div style='overflow-x:auto'>
-                <table class='sample-table' id='sampleTable'>
-                    <thead id='sampleHead'></thead>
-                    <tbody id='sampleBody'></tbody>
-                </table>
-            </div>
+    <div id='sampleBox' style='display:none; margin-top:15px; border-top:1px solid #eee; padding-top:15px;'>
+        <p style='margin:0 0 8px 0; color:#555; font-size:13px;'>Click a row to populate column values.</p>
+        <div style='overflow-x:auto'>
+            <table class='sample-table' id='sampleTable'>
+                <thead id='sampleHead'></thead>
+                <tbody id='sampleBody'></tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -226,6 +234,27 @@ namespace MondayClaudeAI.Controllers
 
         renderSampleTable(sampleItems);
         document.getElementById('sampleBox').style.display = 'block';
+
+        // populate item selector dropdown
+        const selector = document.getElementById('itemSelector');
+        selector.innerHTML = '<option value="">-- Choose an item --</option>';
+        sampleItems.forEach((item, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.text = item.name;
+            selector.appendChild(opt);
+        });
+        const wrap = document.getElementById('itemSelectorWrap');
+        wrap.style.display = 'flex';
+    }
+
+    function selectSampleItemByIndex(idxStr) {
+        if (idxStr === '') return;
+        const idx = parseInt(idxStr, 10);
+        selectSampleItem(idx);
+
+        // scroll to sample table
+        document.getElementById('sampleBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     function renderSampleTable(items) {
@@ -267,6 +296,10 @@ namespace MondayClaudeAI.Controllers
         document.querySelectorAll('#sampleBody tr').forEach((r, i) => {
             r.classList.toggle('selected-row', i === idx);
         });
+
+        // keep dropdown in sync
+        const selector = document.getElementById('itemSelector');
+        if (selector) selector.value = idx;
 
         // populate column values into the board structure list
         allColumns.forEach(col => {
