@@ -287,13 +287,15 @@ namespace MondayClaudeAI.Controllers
         </div>
     </div>
 
-    <div style='display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:15px;'>
+    <div id='selectionContext' style='margin-top:10px; font-size:12px; color:#475569;'>Board ID: - | Item ID: -</div>
+
+    <div style='display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:10px;'>
         <div>
-            <h3>Direct Board Columns</h3>
+            <h3 id='directColumnsTitle'>Direct Board Columns</h3>
             <div id='directColumns'>Click Load Board Columns</div>
         </div>
         <div>
-            <h3>Connected &amp; Mirror Columns</h3>
+            <h3 id='connectedColumnsTitle'>Connected &amp; Mirror Columns</h3>
             <div id='connectedGroup'>Click Load Board Columns</div>
         </div>
     </div>
@@ -685,7 +687,7 @@ namespace MondayClaudeAI.Controllers
             .filter(c => c.type !== 'mirror' && c.type !== 'board_relation')
             .slice(0, 8);
 
-        let headHtml = '<tr><th>#</th><th>Name</th>';
+        let headHtml = '<tr><th>#</th><th>Board ID</th><th>Item ID</th><th>Name</th>';
         visibleCols.forEach(c => {
             headHtml += `<th>${getTypeIcon(c.type)} ${c.title}</th>`;
         });
@@ -695,10 +697,10 @@ namespace MondayClaudeAI.Controllers
         let bodyHtml = '';
         items.forEach((item, idx) => {
             bodyHtml += `<tr onclick='selectSampleItem(${idx})' style='cursor:pointer'>`;
-            bodyHtml += `<td>${idx + 1}</td><td><strong>${item.name}</strong></td>`;
+            bodyHtml += `<td>${idx + 1}</td><td>${boardId || ''}</td><td>${item.id || ''}</td><td><strong>${item.name}</strong></td>`;
             visibleCols.forEach(c => {
-                const cv = item.column_values.find(v => v.id === c.id);
-                const val = cv ? (cv.text || '') : '';
+                const rawVal = getColumnDisplayValue(item, c);
+                const val = rawVal == null ? '' : String(rawVal);
                 bodyHtml += `<td title='${val.split(String.fromCharCode(39)).join(""&apos;"")}'>${val}</td>`;
             });
             bodyHtml += '</tr>';
@@ -913,6 +915,12 @@ namespace MondayClaudeAI.Controllers
         const relations = columns.filter(c => c.type === 'board_relation');
         const mirrors = columns.filter(c => c.type === 'mirror');
 
+        const selectedItemId = selectedSampleItem && selectedSampleItem.id ? String(selectedSampleItem.id) : '-';
+        const currentBoardId = boardId ? String(boardId) : '-';
+        document.getElementById('selectionContext').innerText = `Board ID: ${currentBoardId} | Item ID: ${selectedItemId}`;
+        document.getElementById('directColumnsTitle').innerText = `Direct Board Columns (Board ${currentBoardId})`;
+        document.getElementById('connectedColumnsTitle').innerText = 'Connected & Mirror Columns (Grouped by Board ID)';
+
         const relationIdSet = new Set(relations.map(r => String(r.id)));
 
         const relationMeta = {};
@@ -983,8 +991,44 @@ namespace MondayClaudeAI.Controllers
         boardKeys.forEach(boardId => {
             const group = boardGroups[boardId];
 
+            function collectLinkedItemIdsForGroup() {
+                if (!selectedSampleItem || !selectedSampleItem.column_values) return [];
+                const ids = new Set();
+
+                Array.from(group.relationIds).forEach(relId => {
+                    const cv = selectedSampleItem.column_values.find(v => String(v.id) === String(relId));
+                    if (!cv) return;
+
+                    if (Array.isArray(cv.linked_items)) {
+                        cv.linked_items.forEach(li => {
+                            if (li && li.id != null) ids.add(String(li.id));
+                        });
+                    }
+
+                    if (cv.value) {
+                        try {
+                            const parsed = JSON.parse(cv.value);
+                            if (parsed && Array.isArray(parsed.linkedPulseIds)) {
+                                parsed.linkedPulseIds.forEach(lp => {
+                                    const candidate = lp && (lp.linkedPulseId ?? lp.id ?? lp);
+                                    if (candidate != null) ids.add(String(candidate));
+                                });
+                            }
+                        } catch {
+                            // ignore parse errors
+                        }
+                    }
+                });
+
+                return Array.from(ids);
+            }
+
+            const linkedItemIds = collectLinkedItemIdsForGroup();
+            const linkedText = linkedItemIds.length > 0 ? linkedItemIds.join(', ') : '-';
+
             html += `<div style='margin-bottom:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;'>
-                <div style='font-weight:700; color:#1e293b; margin-bottom:8px; font-size:12px;'>Board ID: ${escapeHtml(boardId)}</div>`;
+                <div style='font-weight:700; color:#1e293b; margin-bottom:4px; font-size:12px;'>Board ID: ${escapeHtml(boardId)}</div>
+                <div style='color:#64748b; margin-bottom:8px; font-size:11px;'>Linked Item ID(s): ${escapeHtml(linkedText)}</div>`;
 
             const groupRelations = Array.from(group.relationIds)
                 .map(id => relationMeta[id]?.column)
@@ -1173,14 +1217,18 @@ namespace MondayClaudeAI.Controllers
 
         // Formula columns expose display_value (text/value are usually empty)
         if (col.type === 'formula') {
-            if (cv.display_value && cv.display_value.trim() !== '') {
-                return cv.display_value;
+            const formulaDisplay = (cv.display_value == null ? '' : String(cv.display_value)).trim();
+            if (formulaDisplay !== '' && formulaDisplay.toLowerCase() !== 'null') {
+                return formulaDisplay;
             }
 
             // monday API limitation: formulas using mirror/connect sources can return empty display_value
             if (formulaReferencesMirrorOrRelation(col, allColumns)) {
-                return '(API limitation: formula references mirror/connect)';
+                return '(unavailable: formula uses mirror/connect)';
             }
+
+            // avoid showing literal string null
+            if (formulaDisplay.toLowerCase() === 'null') return '';
         }
 
         // Mirror columns often have useful text values
