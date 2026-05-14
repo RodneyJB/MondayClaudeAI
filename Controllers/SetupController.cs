@@ -215,6 +215,7 @@ namespace MondayClaudeAI.Controllers
     }
 
     let sampleItems = [];
+    let selectedSampleItem = null;
 
     async function loadSampleItems() {
         if (boardId == null) {
@@ -246,6 +247,12 @@ namespace MondayClaudeAI.Controllers
         });
         const wrap = document.getElementById('itemSelectorWrap');
         wrap.style.display = 'flex';
+
+        // auto-select first item so values show in board columns immediately
+        if (sampleItems.length > 0) {
+            selector.value = '0';
+            selectSampleItem(0);
+        }
     }
 
     function selectSampleItemByIndex(idxStr) {
@@ -291,6 +298,9 @@ namespace MondayClaudeAI.Controllers
 
     function selectSampleItem(idx) {
         const item = sampleItems[idx];
+        if (!item) return;
+
+        selectedSampleItem = item;
 
         // highlight selected row
         document.querySelectorAll('#sampleBody tr').forEach((r, i) => {
@@ -301,19 +311,8 @@ namespace MondayClaudeAI.Controllers
         const selector = document.getElementById('itemSelector');
         if (selector) selector.value = idx;
 
-        // populate column values into the board structure list
-        allColumns.forEach(col => {
-            const el = document.getElementById('col-val-' + col.id);
-            if (!el) return;
-            const cv = item.column_values.find(v => v.id === col.id);
-            const val = cv ? (cv.text || '') : '';
-            el.innerText = val;
-            el.title = val;
-        });
-
-        // also show the name
-        const nameEl = document.getElementById('col-val-name');
-        if (nameEl) nameEl.innerText = item.name;
+        // re-render column groups with selected item values
+        renderColumnGroups(allColumns);
     }
 
     async function loadBoard() {
@@ -341,9 +340,82 @@ namespace MondayClaudeAI.Controllers
         const mirrors = columns.filter(c => c.type === 'mirror');
         const relations = columns.filter(c => c.type === 'board_relation');
 
-        document.getElementById('directColumns').innerHTML = renderColumnList(direct, 'normal');
-        document.getElementById('mirrorColumns').innerHTML = renderColumnList(mirrors, 'mirror');
-        document.getElementById('relationColumns').innerHTML = renderColumnList(relations, 'relation');
+        document.getElementById('directColumns').innerHTML = renderColumnList(direct, 'normal', selectedSampleItem);
+        document.getElementById('mirrorColumns').innerHTML = renderColumnList(mirrors, 'mirror', selectedSampleItem);
+        document.getElementById('relationColumns').innerHTML = renderColumnList(relations, 'relation', selectedSampleItem);
+    }
+
+    function escapeHtml(value) {
+        return (value || '')
+            .toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function readDynamicValue(obj) {
+        if (obj == null) return '';
+
+        if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean') {
+            return String(obj);
+        }
+
+        if (Array.isArray(obj)) {
+            return obj.map(readDynamicValue).filter(v => v !== '').join(', ');
+        }
+
+        if (typeof obj === 'object') {
+            // common monday value shapes
+            if (typeof obj.display_value === 'string' && obj.display_value.trim() !== '') return obj.display_value;
+            if (typeof obj.text === 'string' && obj.text.trim() !== '') return obj.text;
+            if (typeof obj.name === 'string' && obj.name.trim() !== '') return obj.name;
+            if (typeof obj.title === 'string' && obj.title.trim() !== '') return obj.title;
+            if (typeof obj.email === 'string' && obj.email.trim() !== '') return obj.email;
+            if (typeof obj.phone === 'string' && obj.phone.trim() !== '') return obj.phone;
+            if (typeof obj.date === 'string' && obj.date.trim() !== '') return obj.date;
+            if (typeof obj.url === 'string' && obj.url.trim() !== '') return obj.url;
+
+            if (obj.label) {
+                const labelValue = readDynamicValue(obj.label);
+                if (labelValue) return labelValue;
+            }
+
+            if (obj.labels) {
+                const labelsValue = readDynamicValue(obj.labels);
+                if (labelsValue) return labelsValue;
+            }
+
+            if (obj.personsAndTeams) {
+                const peopleValue = readDynamicValue(obj.personsAndTeams);
+                if (peopleValue) return peopleValue;
+            }
+
+            return JSON.stringify(obj);
+        }
+
+        return '';
+    }
+
+    function getColumnDisplayValue(item, col) {
+        if (!item) return '';
+        if (col.id === 'name') return item.name || '';
+
+        const cv = item.column_values.find(v => v.id === col.id);
+        if (!cv) return '';
+
+        if (cv.text && cv.text.trim() !== '') {
+            return cv.text;
+        }
+
+        if (!cv.value) return '';
+
+        try {
+            const parsed = JSON.parse(cv.value);
+            return readDynamicValue(parsed);
+        } catch {
+            return cv.value;
+        }
     }
 
     function getTypeIcon(type) {
@@ -386,7 +458,7 @@ namespace MondayClaudeAI.Controllers
     return icons[type] || '▫️';
 }
 
-function renderColumnList(columns, css) {
+function renderColumnList(columns, css, selectedItem) {
     if (columns.length === 0) {
         return '<em>No columns found</em>';
     }
@@ -394,10 +466,13 @@ function renderColumnList(columns, css) {
     let html = '';
 
     columns.forEach(col => {
+        const value = getColumnDisplayValue(selectedItem, col);
+        const safeValue = escapeHtml(value);
+
         html += `
             <div class='item ${css}' id='col-item-${col.id}'>
                 <strong>${col.title}</strong>
-                <span id='col-val-${col.id}' style='float:right;font-size:12px;color:#374151;max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'></span><br>
+                <div id='col-val-${col.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span style=''color:#9ca3af;''>(empty)</span>'}</div>
                 <span class='type-badge'>
                     ${getTypeIcon(col.type)} ${col.type}
                 </span>
