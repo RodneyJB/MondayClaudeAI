@@ -14,38 +14,189 @@ namespace MondayClaudeAI.Controllers
 <html>
 <head>
     <script src='https://cdn.jsdelivr.net/npm/monday-sdk-js/dist/main.js'></script>
-
     <style>
-        body { font-family: Arial; padding: 20px; background:#f7f8fa; }
-        .box { background:white; border:1px solid #ddd; border-radius:8px; padding:15px; margin-top:15px; }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin:0; padding:0; background:#f0f2f5; display:flex; height:100vh; overflow:hidden; }
+
+        /* ── Left Sidebar ── */
+        #sidebar {
+            width: 240px;
+            min-width: 240px;
+            background: #1e2a3a;
+            color: #c9d6e3;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #sidebar .sidebar-header {
+            padding: 18px 16px 12px;
+            border-bottom: 1px solid #2e3f52;
+        }
+        #sidebar .sidebar-header h2 {
+            margin: 0 0 4px 0;
+            font-size: 15px;
+            color: #fff;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+        }
+        #sidebar .sidebar-header p {
+            margin: 0;
+            font-size: 11px;
+            color: #6b8099;
+        }
+        #sidebar .new-btn {
+            margin: 12px 16px;
+            padding: 9px 14px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            width: calc(100% - 32px);
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s;
+        }
+        #sidebar .new-btn:hover { background: #1d4ed8; }
+        #sidebar .section-label {
+            padding: 8px 16px 4px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #4a6580;
+        }
+        #setup-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 8px 16px;
+        }
+        .setup-item {
+            padding: 10px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 2px;
+            transition: background 0.12s;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .setup-item:hover { background: #2e3f52; }
+        .setup-item.active { background: #2563eb22; border-left: 3px solid #2563eb; padding-left: 7px; }
+        .setup-item .setup-icon { font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+        .setup-item .setup-text .setup-name { font-size: 13px; color: #dde5f0; font-weight: 600; }
+        .setup-item .setup-text .setup-meta { font-size: 11px; color: #4a6580; margin-top: 2px; }
+        .setup-empty { padding: 16px 10px; font-size: 12px; color: #4a6580; font-style: italic; }
+
+        /* ── Main Content ── */
+        #main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        #topbar {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        #topbar h1 { margin: 0; font-size: 18px; color: #1e2a3a; font-weight: 700; }
+        #topbar .board-info { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 6px; }
+        #topbar .board-info strong { color: #1e2a3a; }
+        #topbar .top-actions { display: flex; gap: 8px; }
+
+        #content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        /* ── Boxes ── */
+        .box { background:white; border:1px solid #e2e8f0; border-radius:10px; padding:20px; margin-bottom:16px; }
+        .box h2 { margin:0 0 16px 0; font-size:16px; color:#1e2a3a; font-weight:700; border-bottom:1px solid #f1f5f9; padding-bottom:10px; }
+        .box h3 { font-size:13px; color:#374151; margin:16px 0 6px 0; font-weight:700; }
+
+        /* ── Form elements ── */
+        select, input, textarea { width:100%; padding:8px 10px; box-sizing:border-box; margin-top:4px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; color:#1e2a3a; background:#fff; }
+        select:focus, input:focus, textarea:focus { outline:none; border-color:#2563eb; box-shadow: 0 0 0 3px #2563eb18; }
+        label { font-size:12px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.4px; }
+
+        /* ── Buttons ── */
+        button { padding:8px 16px; cursor:pointer; border:none; border-radius:6px; font-size:13px; font-weight:600; background:#f1f5f9; color:#374151; transition: all 0.15s; }
+        button:hover { background:#e2e8f0; }
+        .btn-primary { background:#2563eb; color:white; }
+        .btn-primary:hover { background:#1d4ed8; }
+        .btn-success { background:#16a34a; color:white; }
+        .btn-success:hover { background:#15803d; }
+
+        /* ── Layout helpers ── */
         .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; }
-        .item { padding:8px; border-bottom:1px solid #eee; font-size:13px; }
-        select, input, textarea { width:100%; padding:8px; box-sizing:border-box; margin-top:4px; }
-        button { padding:8px 14px; cursor:pointer; margin-top:8px; }
-        .mirror { color:#b45309; font-weight:bold; }
-        .relation { color:#2563eb; font-weight:bold; }
-        .normal { color:#111827; }
-        .mapping-row { display:grid; grid-template-columns:1fr 1fr 80px; gap:10px; margin-bottom:8px; }
         .two-col { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
-        .type-badge { font-size:12px; color:#555; }
-        .sample-table { width:100%; border-collapse:collapse; font-size:13px; margin-top:10px; }
-        .sample-table th { background:#f1f5f9; text-align:left; padding:6px 8px; border:1px solid #ddd; }
-        .sample-table td { padding:6px 8px; border:1px solid #eee; vertical-align:top; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .mapping-row { display:grid; grid-template-columns:1fr 1fr 80px; gap:10px; margin-bottom:8px; align-items:end; }
+
+        /* ── Column items ── */
+        .item { padding:8px 10px; border-bottom:1px solid #f1f5f9; font-size:13px; }
+        .mirror { color:#b45309; }
+        .relation { color:#2563eb; }
+        .normal { color:#111827; }
+        .type-badge { font-size:11px; color:#9ca3af; margin-top:3px; }
+
+        /* ── Sample table ── */
+        .sample-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
+        .sample-table th { background:#f8fafc; text-align:left; padding:6px 8px; border:1px solid #e2e8f0; font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:0.4px; }
+        .sample-table td { padding:6px 8px; border:1px solid #f1f5f9; vertical-align:top; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .sample-table tr:hover td { background:#f8fafc; }
         .selected-row td { background:#eff6ff !important; }
+
+        /* ── Status badge ── */
+        .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+        .badge-blue { background:#dbeafe; color:#1d4ed8; }
+        .badge-green { background:#dcfce7; color:#15803d; }
     </style>
 </head>
-
 <body>
 
-<h1>Claude AI Setup</h1>
+<!-- LEFT SIDEBAR -->
+<div id='sidebar'>
+    <div class='sidebar-header'>
+        <h2>🤖 Claude AI</h2>
+        <p>Monday.com Automations</p>
+    </div>
 
-<div class='box'>
-    <strong>Current Board ID:</strong>
-    <span id='boardIdText'>Loading...</span>
-    <br><br>
-    <button onclick='loadBoard()'>Load Board Columns</button>
+    <button class='new-btn' onclick='newSetup()'>
+        ＋ New Setup
+    </button>
+
+    <div class='section-label'>Saved Setups</div>
+
+    <div id='setup-list'>
+        <div class='setup-empty' id='setup-empty-msg'>No setups yet. Click New Setup to get started.</div>
+    </div>
 </div>
+
+<!-- MAIN CONTENT -->
+<div id='main'>
+
+    <!-- TOP BAR -->
+    <div id='topbar'>
+        <h1 id='page-title'>New AI Task</h1>
+        <div class='board-info'>
+            Board ID: <strong id='boardIdText'>Loading...</strong>
+            <button onclick='loadBoard()' style='padding:5px 12px; font-size:12px; margin:0;'>↺ Load Board</button>
+        </div>
+    </div>
+
+    <!-- SCROLLABLE CONTENT -->
+    <div id='content-area'>
 
 <div class='box'>
     <h2>Create AI Task</h2>
@@ -112,11 +263,13 @@ namespace MondayClaudeAI.Controllers
 
     <button onclick='addMappingRow()'>+ Add Mapping</button>
 
-    <br><br>
+    <div style='display:flex; gap:10px; margin-top:16px; align-items:center; flex-wrap:wrap;'>
+        <button class='btn-success' onclick='saveSetup()'>💾 Save Setup</button>
+        <button class='btn-primary' onclick='prepareTask()'>▶ Prepare AI Task</button>
+        <button onclick='newSetup()' style='margin-left:auto;'>✕ Clear Form</button>
+    </div>
 
-    <button onclick='prepareTask()'>Prepare AI Task</button>
-
-    <pre id='taskResult'></pre>
+    <pre id='taskResult' style='background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px; font-size:12px; margin-top:12px; display:none;'></pre>
 </div>
 
 <div class='box'>
@@ -161,6 +314,9 @@ namespace MondayClaudeAI.Controllers
     </div>
 </div>
 
+    </div><!-- /content-area -->
+</div><!-- /main -->
+
 <pre id='contextHidden' style='display:none'></pre>
 
 <script>
@@ -168,6 +324,130 @@ namespace MondayClaudeAI.Controllers
 
     let boardId = null;
     let allColumns = [];
+    let savedSetups = JSON.parse(localStorage.getItem('claudeAiSetups') || '[]');
+    let editingSetupId = null;
+
+    renderSidebarList();
+
+    function renderSidebarList() {
+        const list = document.getElementById('setup-list');
+        const emptyMsg = document.getElementById('setup-empty-msg');
+
+        const existing = list.querySelectorAll('.setup-item');
+        existing.forEach(e => e.remove());
+
+        if (savedSetups.length === 0) {
+            emptyMsg.style.display = 'block';
+            return;
+        }
+        emptyMsg.style.display = 'none';
+
+        savedSetups.forEach(s => {
+            const el = document.createElement('div');
+            el.className = 'setup-item' + (s.id === editingSetupId ? ' active' : '');
+            el.dataset.id = s.id;
+            el.onclick = () => loadSetupIntoForm(s.id);
+            el.innerHTML = `
+                <div class='setup-icon'>🤖</div>
+                <div class='setup-text'>
+                    <div class='setup-name'>${escapeHtml(s.taskName || 'Untitled')}</div>
+                    <div class='setup-meta'>${escapeHtml(s.trigger ? s.trigger.type : '')} &bull; ${s.outputs ? s.outputs.length : 0} output(s)</div>
+                </div>
+            `;
+            list.appendChild(el);
+        });
+    }
+
+    function saveSetup() {
+        const mappings = [];
+        document.querySelectorAll('.mapping-row').forEach(row => {
+            const inputs = row.querySelectorAll('input, select');
+            if (inputs[0].value.trim()) {
+                mappings.push({ aiField: inputs[0].value, mondayColumnId: inputs[1].value });
+            }
+        });
+
+        const taskName = document.getElementById('taskName').value.trim();
+        if (!taskName) { alert('Please enter a Task Name before saving.'); return; }
+
+        const setup = {
+            id: editingSetupId || ('setup-' + Date.now()),
+            boardId: boardId,
+            taskName: taskName,
+            trigger: { type: document.getElementById('triggerType').value, columnId: document.getElementById('triggerColumn').value },
+            input: { type: document.getElementById('inputType').value, columnId: document.getElementById('inputColumn').value },
+            condition: { type: document.getElementById('conditionType').value, columnId: document.getElementById('conditionColumn').value, value: document.getElementById('conditionValue').value },
+            ai: { provider: 'Claude', instruction: document.getElementById('aiInstruction').value },
+            outputs: mappings,
+            savedAt: new Date().toLocaleString()
+        };
+
+        if (editingSetupId) {
+            const idx = savedSetups.findIndex(s => s.id === editingSetupId);
+            if (idx >= 0) savedSetups[idx] = setup;
+        } else {
+            savedSetups.unshift(setup);
+        }
+
+        editingSetupId = setup.id;
+        localStorage.setItem('claudeAiSetups', JSON.stringify(savedSetups));
+        renderSidebarList();
+        document.getElementById('page-title').innerText = setup.taskName;
+        alert('Setup saved!');
+    }
+
+    function loadSetupIntoForm(id) {
+        const s = savedSetups.find(x => x.id === id);
+        if (!s) return;
+
+        editingSetupId = id;
+        document.getElementById('page-title').innerText = s.taskName || 'AI Task';
+        document.getElementById('taskName').value = s.taskName || '';
+        document.getElementById('aiInstruction').value = s.ai ? s.ai.instruction : '';
+        document.getElementById('conditionValue').value = s.condition ? s.condition.value : '';
+
+        if (s.trigger) {
+            const tt = document.getElementById('triggerType');
+            if (tt) setSelectValue(tt, s.trigger.type);
+        }
+        if (s.input) {
+            const it = document.getElementById('inputType');
+            if (it) setSelectValue(it, s.input.type);
+        }
+        if (s.condition) {
+            const ct = document.getElementById('conditionType');
+            if (ct) setSelectValue(ct, s.condition.type);
+        }
+
+        document.getElementById('mappingRows').innerHTML = '';
+        if (s.outputs && s.outputs.length > 0) {
+            s.outputs.forEach(m => addMappingRow(m.aiField, m.mondayColumnId));
+        } else {
+            addMappingRow();
+        }
+
+        renderSidebarList();
+        document.getElementById('content-area').scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function setSelectValue(select, val) {
+        for (let i = 0; i < select.options.length; i++) {
+            if (select.options[i].value === val) { select.selectedIndex = i; return; }
+        }
+    }
+
+    function newSetup() {
+        editingSetupId = null;
+        document.getElementById('page-title').innerText = 'New AI Task';
+        document.getElementById('taskName').value = '';
+        document.getElementById('aiInstruction').value = '';
+        document.getElementById('conditionValue').value = '';
+        document.getElementById('mappingRows').innerHTML = '';
+        document.getElementById('taskResult').style.display = 'none';
+        addMappingRow();
+        renderSidebarList();
+        document.getElementById('content-area').scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
     const triggerTypes = [
         'When item created',
@@ -200,6 +480,7 @@ namespace MondayClaudeAI.Controllers
     });
 
     fillStaticDropdowns();
+    addMappingRow();
 
     function fillStaticDropdowns() {
         const trigger = document.getElementById('triggerType');
@@ -506,7 +787,7 @@ function renderColumnList(columns, css, selectedItem) {
         });
     }
 
-    function addMappingRow() {
+    function addMappingRow(prefillAiField, prefillColumnId) {
         const container = document.getElementById('mappingRows');
 
         const row = document.createElement('div');
@@ -514,6 +795,7 @@ function renderColumnList(columns, css, selectedItem) {
 
         const aiField = document.createElement('input');
         aiField.placeholder = 'AI field, example: vin';
+        if (prefillAiField) aiField.value = prefillAiField;
 
         const mondayColumn = document.createElement('select');
 
@@ -525,6 +807,8 @@ function renderColumnList(columns, css, selectedItem) {
                 mondayColumn.appendChild(option);
             }
         });
+
+        if (prefillColumnId) setSelectValue(mondayColumn, prefillColumnId);
 
         const removeButton = document.createElement('button');
         removeButton.innerText = 'Remove';
@@ -541,43 +825,24 @@ function renderColumnList(columns, css, selectedItem) {
 
     function prepareTask() {
         const mappings = [];
-
         document.querySelectorAll('.mapping-row').forEach(row => {
             const inputs = row.querySelectorAll('input, select');
-
-            mappings.push({
-                aiField: inputs[0].value,
-                mondayColumnId: inputs[1].value
-            });
+            mappings.push({ aiField: inputs[0].value, mondayColumnId: inputs[1].value });
         });
 
         const task = {
             boardId: boardId,
             taskName: document.getElementById('taskName').value,
-            trigger: {
-                type: document.getElementById('triggerType').value,
-                columnId: document.getElementById('triggerColumn').value
-            },
-            input: {
-                type: document.getElementById('inputType').value,
-                columnId: document.getElementById('inputColumn').value
-            },
-            condition: {
-                type: document.getElementById('conditionType').value,
-                columnId: document.getElementById('conditionColumn').value,
-                value: document.getElementById('conditionValue').value
-            },
-            ai: {
-                provider: 'Claude',
-                instruction: document.getElementById('aiInstruction').value
-            },
+            trigger: { type: document.getElementById('triggerType').value, columnId: document.getElementById('triggerColumn').value },
+            input: { type: document.getElementById('inputType').value, columnId: document.getElementById('inputColumn').value },
+            condition: { type: document.getElementById('conditionType').value, columnId: document.getElementById('conditionColumn').value, value: document.getElementById('conditionValue').value },
+            ai: { provider: 'Claude', instruction: document.getElementById('aiInstruction').value },
             outputs: mappings
         };
 
-        document.getElementById('taskResult').innerText =
-            JSON.stringify(task, null, 2);
-
-        alert('AI task prepared. Next step is saving this task to the backend.');
+        const pre = document.getElementById('taskResult');
+        pre.innerText = JSON.stringify(task, null, 2);
+        pre.style.display = 'block';
     }
 </script>
 
