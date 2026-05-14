@@ -474,30 +474,38 @@ namespace MondayClaudeAI.Controllers
         'If mirror column contains value'
     ];
 
-    // Try monday.get first (reliable), fall back to listen
-    function initContext() {
+    function applyBoardId(id) {
+        if (!id || id === boardId) return;
+        boardId = id;
+        document.getElementById('boardIdText').innerText = boardId;
+        document.getElementById('manualBoardId').value = boardId;
+        loadBoard();
+    }
+
+    // monday.listen fires when context is ready inside the iframe
+    monday.listen('context', function(res) {
+        applyBoardId(res.data && res.data.boardId);
+    });
+
+    // Also poll monday.get('context') with retries - SDK sometimes needs a moment
+    function pollContext(attempts) {
         monday.get('context').then(function(res) {
             var id = res.data && res.data.boardId;
             if (id) {
-                boardId = id;
-                document.getElementById('boardIdText').innerText = boardId;
-                document.getElementById('manualBoardId').value = boardId;
-                loadBoard();
+                applyBoardId(id);
+            } else if (attempts > 0) {
+                setTimeout(function() { pollContext(attempts - 1); }, 800);
+            } else {
+                document.getElementById('boardIdText').innerText = 'Not detected - enter ID manually';
             }
-        }).catch(function() {});
-
-        monday.listen('context', function(res) {
-            var id = res.data && res.data.boardId;
-            if (id && id !== boardId) {
-                boardId = id;
-                document.getElementById('boardIdText').innerText = boardId;
-                document.getElementById('manualBoardId').value = boardId;
-                loadBoard();
-            }
+        }).catch(function() {
+            if (attempts > 0) setTimeout(function() { pollContext(attempts - 1); }, 800);
         });
     }
 
-    initContext();
+    // Start polling after a short delay to let the SDK initialise
+    setTimeout(function() { pollContext(10); }, 500);
+
     fillStaticDropdowns();
     addMappingRow();
 
