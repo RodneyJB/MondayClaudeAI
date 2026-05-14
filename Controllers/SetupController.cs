@@ -477,6 +477,8 @@ namespace MondayClaudeAI.Controllers
         boardId = res.data.boardId;
         document.getElementById('boardIdText').innerText = boardId;
         document.getElementById('contextHidden').innerText = JSON.stringify(res.data, null, 2);
+        // auto-load board columns as soon as we have the board ID
+        loadBoard();
     });
 
     fillStaticDropdowns();
@@ -598,18 +600,32 @@ namespace MondayClaudeAI.Controllers
 
     async function loadBoard() {
         if (boardId == null) {
-            alert('Board ID not loaded yet');
+            document.getElementById('boardIdText').innerText = 'Waiting for board...';
             return;
         }
 
-        const response = await fetch('/test-columns/' + boardId);
-        const data = await response.json();
+        const btn = document.querySelector('#topbar button');
+        if (btn) { btn.innerText = '⏳ Loading...'; btn.disabled = true; }
 
-        allColumns = data.data.boards[0].columns;
+        try {
+            const response = await fetch('/test-columns/' + boardId);
+            const data = await response.json();
 
-        renderColumnGroups(allColumns);
-        fillColumnDropdowns(allColumns);
-        addMappingRow();
+            allColumns = data.data.boards[0].columns;
+
+            renderColumnGroups(allColumns);
+            fillColumnDropdowns(allColumns);
+
+            // only add a mapping row if none exist yet
+            if (document.getElementById('mappingRows').children.length === 0) {
+                addMappingRow();
+            }
+
+            if (btn) { btn.innerText = '✓ Board Loaded'; btn.disabled = false; }
+        } catch(e) {
+            console.error(e);
+            if (btn) { btn.innerText = '↺ Load Board'; btn.disabled = false; }
+        }
     }
 
     function renderColumnGroups(columns) {
