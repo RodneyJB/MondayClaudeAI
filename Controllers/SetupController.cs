@@ -149,6 +149,7 @@ namespace MondayClaudeAI.Controllers
         .relation { color:#2563eb; }
         .normal { color:#111827; }
         .type-badge { font-size:11px; color:#9ca3af; margin-top:3px; }
+        .empty-value { color:#9ca3af; }
 
         /* ── Sample table ── */
         .sample-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:10px; }
@@ -191,7 +192,7 @@ namespace MondayClaudeAI.Controllers
         <h1 id='page-title'>New AI Task</h1>
         <div class='board-info' style='display:flex; align-items:center; gap:8px; flex-wrap:wrap;'>
             Board ID: <strong id='boardIdText'>Loading...</strong>
-            <input id='manualBoardId' placeholder='or enter board ID...' style='width:160px; padding:4px 8px; font-size:12px; margin:0; border:1px solid #d1d5db; border-radius:5px;' onkeydown='if(event.key==''Enter''){manualLoad();}'>
+            <input id='manualBoardId' placeholder='or enter board ID...' style='width:160px; padding:4px 8px; font-size:12px; margin:0; border:1px solid #d1d5db; border-radius:5px;' onkeydown='if(event.key==""Enter""){manualLoad();}'>
             <button onclick='manualLoad()' style='padding:5px 12px; font-size:12px; margin:0;'>&#8635; Load Board</button>
         </div>
     </div>
@@ -945,7 +946,7 @@ function renderColumnList(columns, css, selectedItem) {
         html += `
             <div class='item ${css}' id='col-item-${col.id}'>
                 <strong>${col.title}</strong>
-                <div id='col-val-${col.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span style=''color:#9ca3af;''>(empty)</span>'}</div>
+                <div id='col-val-${col.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span class=""empty-value"">(empty)</span>'}</div>
                 <span class='type-badge'>
                     ${getTypeIcon(col.type)} ${col.type}
                 </span>
