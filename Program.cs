@@ -5,6 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddHttpClient<MondayService>();
+builder.Services.AddHttpClient<AiService>();
 
 var app = builder.Build();
 
