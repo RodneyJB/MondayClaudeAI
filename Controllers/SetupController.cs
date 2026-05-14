@@ -1124,6 +1124,7 @@ namespace MondayClaudeAI.Controllers
 
         const relationIdSet = new Set(relations.map(r => String(r.id)));
         const relationLikeMirrorIds = new Set();
+        const mirrorResolutionById = {};
 
         if (selectedSampleItem && selectedSampleItem.id && boardId && mirrors.length > 0) {
             const cacheKey = `resolved|${String(boardId)}|${String(selectedSampleItem.id)}`;
@@ -1157,6 +1158,8 @@ namespace MondayClaudeAI.Controllers
                 const origins = Array.isArray(row && row.origins) ? row.origins : [];
                 if (!mirrorId || origins.length === 0) return;
 
+                mirrorResolutionById[mirrorId] = row;
+
                 const isResolvedRelationLike = origins.some(origin => {
                     const t = String(origin && origin.columnType || '').toLowerCase();
                     return t === 'board_relation' || t === 'connect_boards';
@@ -1189,6 +1192,18 @@ namespace MondayClaudeAI.Controllers
             let boardIds = parentRelId && relationMeta[parentRelId]
                 ? relationMeta[parentRelId].boardIds
                 : collectBoardIds(settings);
+
+            // Also include deep origin boards discovered by resolver trail, so mirror-in-mirror
+            // chains surface their true source boards as separate groups.
+            const resolvedRow = mirrorResolutionById[String(m.id)];
+            const originBoardIds = new Set(
+                (Array.isArray(resolvedRow && resolvedRow.origins) ? resolvedRow.origins : [])
+                    .map(o => String(o && o.boardId || '').trim())
+                    .filter(x => x !== '')
+            );
+            if (originBoardIds.size > 0) {
+                boardIds = Array.from(new Set([...(boardIds || []), ...originBoardIds]));
+            }
 
             mirrorMeta[String(m.id)] = {
                 column: m,
@@ -1265,6 +1280,19 @@ namespace MondayClaudeAI.Controllers
                             // ignore parse errors
                         }
                     }
+                });
+
+                // Add deep origin item ids for mirrors that resolve into this board group.
+                Array.from(group.mirrorIds).forEach(mid => {
+                    const row = mirrorResolutionById[String(mid)];
+                    const origins = Array.isArray(row && row.origins) ? row.origins : [];
+                    origins.forEach(o => {
+                        const b = String(o && o.boardId || '');
+                        const i = String(o && o.itemId || '');
+                        if (b === String(boardId) && i !== '') {
+                            ids.add(i);
+                        }
+                    });
                 });
 
                 return Array.from(ids);
