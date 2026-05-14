@@ -798,84 +798,246 @@ namespace MondayClaudeAI.Controllers
         }
     }
 
+    function safeParseSettings(rawSettings, rawSettingsStr) {
+        if (rawSettings && typeof rawSettings === 'object') {
+            return rawSettings;
+        }
+
+        if (typeof rawSettings === 'string' && rawSettings.trim() !== '') {
+            try {
+                return JSON.parse(rawSettings);
+            } catch {
+                // fallback to settings_str
+            }
+        }
+
+        try {
+            return JSON.parse(rawSettingsStr || '{}');
+        } catch {
+            return {};
+        }
+    }
+
+    function collectBoardIds(settingsObj) {
+        const ids = new Set();
+
+        function pushBoardId(value) {
+            if (value == null) return;
+            if (Array.isArray(value)) {
+                value.forEach(pushBoardId);
+                return;
+            }
+
+            const str = String(value).trim();
+            if (/^\d+$/.test(str)) ids.add(str);
+        }
+
+        function walk(node) {
+            if (!node) return;
+
+            if (Array.isArray(node)) {
+                node.forEach(walk);
+                return;
+            }
+
+            if (typeof node !== 'object') return;
+
+            Object.entries(node).forEach(([key, value]) => {
+                const k = String(key || '').toLowerCase();
+                if (k === 'boardid' || k === 'boardids' || k === 'linkedboardids' || (k.includes('board') && k.includes('id'))) {
+                    pushBoardId(value);
+                }
+                walk(value);
+            });
+        }
+
+        walk(settingsObj);
+        return Array.from(ids);
+    }
+
+    function extractParentRelationId(settingsObj, relationIdSet) {
+        let found = null;
+
+        function walk(node) {
+            if (found || !node) return;
+
+            if (Array.isArray(node)) {
+                node.forEach(walk);
+                return;
+            }
+
+            if (typeof node !== 'object') return;
+
+            // monday mirror settings shape:
+            // relation_column: { ""board_relation_xxx"": true }
+            if (node.relation_column && typeof node.relation_column === 'object' && !Array.isArray(node.relation_column)) {
+                const keys = Object.keys(node.relation_column);
+                for (const key of keys) {
+                    const relKey = String(key);
+                    if (relationIdSet.has(relKey)) {
+                        found = relKey;
+                        return;
+                    }
+                }
+            }
+
+            Object.entries(node).forEach(([key, value]) => {
+                if (found) return;
+
+                const k = String(key || '').toLowerCase();
+                const valStr = value == null ? '' : String(value);
+
+                const isRelationIdKey =
+                    k === 'boardrelationcolumnid' ||
+                    k === 'relation_column_id' ||
+                    k === 'relationcolumnid' ||
+                    (k.includes('relation') && k.includes('column') && k.includes('id'));
+
+                if (isRelationIdKey && relationIdSet.has(valStr)) {
+                    found = valStr;
+                    return;
+                }
+
+                if (typeof value === 'object') {
+                    walk(value);
+                }
+            });
+        }
+
+        walk(settingsObj);
+        return found;
+    }
+
     function renderColumnGroups(columns) {
         const direct = columns.filter(c => c.type !== 'mirror' && c.type !== 'board_relation');
         const relations = columns.filter(c => c.type === 'board_relation');
         const mirrors = columns.filter(c => c.type === 'mirror');
 
-        // Parse settings to map mirrors to their parent board_relation
-        const relationInfo = {}; // relColId -> { title, settings_str }
-        const mirrorInfo = {}; // mirrorColId -> parentRelId
+        const relationIdSet = new Set(relations.map(r => String(r.id)));
 
+        const relationMeta = {};
         relations.forEach(rel => {
-            relationInfo[rel.id] = { title: rel.title, settings_str: rel.settings_str };
+            const settings = safeParseSettings(rel.settings, rel.settings_str);
+            const boardIds = collectBoardIds(settings);
+            relationMeta[String(rel.id)] = {
+                column: rel,
+                settings,
+                boardIds: boardIds.length ? boardIds : ['unknown']
+            };
         });
 
+        const mirrorMeta = {};
         mirrors.forEach(m => {
-            try {
-                const s = JSON.parse(m.settings_str || '{}');
-                // Try multiple possible field names for the parent relation column ID
-                const parentId = s.boardRelationColumnId || s.relation_column_id || s.relationColumnId || null;
-                mirrorInfo[m.id] = parentId;
-            } catch {
-                mirrorInfo[m.id] = null;
+            const settings = safeParseSettings(m.settings, m.settings_str);
+            const parentRelId = extractParentRelationId(settings, relationIdSet);
+            let boardIds = collectBoardIds(settings);
+
+            if ((!boardIds || boardIds.length === 0) && parentRelId && relationMeta[parentRelId]) {
+                boardIds = relationMeta[parentRelId].boardIds;
             }
+
+            mirrorMeta[String(m.id)] = {
+                column: m,
+                settings,
+                parentRelId,
+                boardIds: boardIds.length ? boardIds : ['unknown']
+            };
         });
 
         document.getElementById('directColumns').innerHTML = renderColumnList(direct, 'normal', selectedSampleItem);
 
-        // Group relations and their mirrors by relation column ID (not board ID)
-        let html = '';
-        const usedMirrors = new Set();
-        const groupedByRelation = {};
+        const boardGroups = {};
 
-        // First, group mirrors by their parent relation
-        mirrors.forEach(m => {
-            const parentId = mirrorInfo[m.id];
-            if (parentId && relationInfo[parentId]) {
-                if (!groupedByRelation[parentId]) {
-                    groupedByRelation[parentId] = [];
-                }
-                groupedByRelation[parentId].push(m);
-                usedMirrors.add(m.id);
+        function ensureGroup(boardId) {
+            const key = String(boardId || 'unknown');
+            if (!boardGroups[key]) {
+                boardGroups[key] = {
+                    boardId: key,
+                    relationIds: new Set(),
+                    mirrorIds: new Set()
+                };
             }
+            return boardGroups[key];
+        }
+
+        Object.values(relationMeta).forEach(meta => {
+            meta.boardIds.forEach(boardId => {
+                ensureGroup(boardId).relationIds.add(String(meta.column.id));
+            });
         });
 
-        // Render each relation with its grouped mirrors
-        relations.forEach(rel => {
-            const value = getColumnDisplayValue(selectedSampleItem, rel);
-            const safeValue = escapeHtml(value);
+        Object.values(mirrorMeta).forEach(meta => {
+            meta.boardIds.forEach(boardId => {
+                ensureGroup(boardId).mirrorIds.add(String(meta.column.id));
+            });
+        });
+
+        const boardKeys = Object.keys(boardGroups).sort((a, b) => {
+            if (a === 'unknown' && b !== 'unknown') return 1;
+            if (b === 'unknown' && a !== 'unknown') return -1;
+            return a.localeCompare(b, undefined, { numeric: true });
+        });
+
+        let html = '';
+
+        boardKeys.forEach(boardId => {
+            const group = boardGroups[boardId];
+
             html += `<div style='margin-bottom:12px; padding:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;'>
-                <div style='font-weight:600; color:#1e293b; margin-bottom:8px; font-size:13px;'>${rel.title}</div>
-                <div class='item relation' id='col-item-${rel.id}' style='margin-bottom:8px;'>
+                <div style='font-weight:700; color:#1e293b; margin-bottom:8px; font-size:12px;'>Board ID: ${escapeHtml(boardId)}</div>`;
+
+            const groupRelations = Array.from(group.relationIds)
+                .map(id => relationMeta[id]?.column)
+                .filter(Boolean)
+                .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+            const usedMirrorIds = new Set();
+
+            groupRelations.forEach(rel => {
+                const value = getColumnDisplayValue(selectedSampleItem, rel);
+                const safeValue = escapeHtml(value);
+
+                html += `<div class='item relation' id='col-item-${rel.id}' style='margin-bottom:8px;'>
                     <strong>${rel.title}</strong>
                     <div id='col-val-${rel.id}' title='${safeValue}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${safeValue || '<span class=""empty-value"">(empty)</span>'}</div>
                     <span class='type-badge'>${getTypeIcon(rel.type)} board_relation</span>
                 </div>`;
-                
-            const childMirrors = groupedByRelation[rel.id] || [];
-            if (childMirrors.length > 0) {
-                html += `<div style='margin-left:12px; border-left:2px solid #cbd5e1; padding-left:10px;'>`;
-                childMirrors.forEach(m => {
-                    const mv = getColumnDisplayValue(selectedSampleItem, m);
-                    const smv = escapeHtml(mv);
-                    html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
-                        <strong>${m.title}</strong>
-                        <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
-                        <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
-                    </div>`;
-                });
-                html += '</div>';
-            }
-            html += '</div>';
-        });
 
-        // Orphaned mirrors not linked to any board_relation
-        const orphans = mirrors.filter(m => !usedMirrors.has(m.id));
-        if (orphans.length > 0) {
-            html += `<div style='margin-top:8px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:11px; color:#94a3b8; margin-bottom:4px;'>Unlinked mirror columns</div>`;
-            html += renderColumnList(orphans, 'mirror', selectedSampleItem);
-        }
+                const childMirrors = Array.from(group.mirrorIds)
+                    .map(id => mirrorMeta[id])
+                    .filter(m => m && m.parentRelId === String(rel.id))
+                    .map(m => m.column)
+                    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+                if (childMirrors.length > 0) {
+                    html += `<div style='margin-left:12px; border-left:2px solid #cbd5e1; padding-left:10px; margin-bottom:10px;'>`;
+                    childMirrors.forEach(m => {
+                        usedMirrorIds.add(String(m.id));
+                        const mv = getColumnDisplayValue(selectedSampleItem, m);
+                        const smv = escapeHtml(mv);
+                        html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
+                            <strong>${m.title}</strong>
+                            <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
+                            <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
+                        </div>`;
+                    });
+                    html += `</div>`;
+                }
+            });
+
+            const orphanMirrorsInGroup = Array.from(group.mirrorIds)
+                .filter(id => !usedMirrorIds.has(id))
+                .map(id => mirrorMeta[id]?.column)
+                .filter(Boolean)
+                .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+            if (orphanMirrorsInGroup.length > 0) {
+                html += `<div style='margin-top:4px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:11px; color:#94a3b8; margin-bottom:4px;'>Additional mirrors</div>`;
+                html += renderColumnList(orphanMirrorsInGroup, 'mirror', selectedSampleItem);
+            }
+
+            html += `</div>`;
+        });
 
         if (html === '') html = '<em>No connected columns</em>';
         document.getElementById('connectedGroup').innerHTML = html;
@@ -925,6 +1087,37 @@ namespace MondayClaudeAI.Controllers
             if (obj.personsAndTeams) {
                 const peopleValue = readDynamicValue(obj.personsAndTeams);
                 if (peopleValue) return peopleValue;
+            }
+
+            if (obj.mirrored_items) {
+                const mirroredItemsValue = readDynamicValue(obj.mirrored_items);
+                if (mirroredItemsValue) return mirroredItemsValue;
+            }
+
+            if (obj.mirrored_value) {
+                const mirroredValue = readDynamicValue(obj.mirrored_value);
+                if (mirroredValue) return mirroredValue;
+            }
+
+            // generic deep scan for nested formula/mirror payloads
+            for (const [key, value] of Object.entries(obj)) {
+                const k = String(key || '').toLowerCase();
+                if (k === 'id' || k === 'ids' || k === 'changed_at' || k === 'column_id' || k === 'type') {
+                    continue;
+                }
+
+                if (value == null) continue;
+
+                if (typeof value === 'string' && value.trim() !== '') {
+                    if (k.includes('display') || k.includes('text') || k.includes('name') || k.includes('title') || k.includes('label') || k.includes('formula') || k.includes('result') || k === 'value') {
+                        return value;
+                    }
+                }
+
+                if (typeof value === 'object') {
+                    const nestedValue = readDynamicValue(value);
+                    if (nestedValue) return nestedValue;
+                }
             }
 
             return JSON.stringify(obj);
