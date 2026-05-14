@@ -21,7 +21,6 @@ Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\staticwebassets.build.j
 Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\staticwebassets.build.json.cache
 Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\staticwebassets.development.json
 Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\staticwebassets.build.endpoints.json
-Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\swae.build.ex.cache
 Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\MondayClaudeAI.dll
 Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\refint\MondayClaudeAI.dll
 Z:\BP WEB\MondayClaudeAI\MondayClaudeAI\obj\Debug\net8.0\MondayClaudeAI.pdb

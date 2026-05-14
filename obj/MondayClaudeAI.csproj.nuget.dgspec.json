@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "Z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj": {}
+    "z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj": {}
   },
   "projects": {
-    "Z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj": {
+    "z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "Z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj",
+        "projectUniqueName": "z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj",
         "projectName": "MondayClaudeAI",
-        "projectPath": "Z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj",
+        "projectPath": "z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\MondayClaudeAI.csproj",
         "packagesPath": "C:\\Users\\rodney\\.nuget\\packages\\",
-        "outputPath": "Z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\obj\\",
+        "outputPath": "z:\\BP WEB\\MondayClaudeAI\\MondayClaudeAI\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -26,7 +26,6 @@
         ],
         "sources": {
           "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -45,7 +44,7 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "10.0.100"
+        "SdkAnalysisLevel": "9.0.300"
       },
       "frameworks": {
         "net8.0": {
@@ -69,7 +68,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

@@ -192,8 +192,7 @@ namespace MondayClaudeAI.Controllers
         <h1 id='page-title'>New AI Task</h1>
         <div class='board-info' style='display:flex; align-items:center; gap:8px; flex-wrap:wrap;'>
             Board ID: <strong id='boardIdText'>Loading...</strong>
-            <input id='manualBoardId' placeholder='or enter board ID...' style='width:160px; padding:4px 8px; font-size:12px; margin:0; border:1px solid #d1d5db; border-radius:5px;' onkeydown='if(event.key==""Enter""){manualLoad();}'>
-            <button onclick='manualLoad()' style='padding:5px 12px; font-size:12px; margin:0;'>&#8635; Load Board</button>
+            <input id='manualBoardId' style='display:none;'>
         </div>
     </div>
 
@@ -295,13 +294,13 @@ namespace MondayClaudeAI.Controllers
         </div>
 
         <div>
-            <h3>Mirror Columns</h3>
-            <div id='mirrorColumns'>Click Load Board Columns</div>
+            <h3>Connected Board Columns</h3>
+            <div id='relationColumns'>Click Load Board Columns</div>
         </div>
 
         <div>
-            <h3>Connected Board Columns</h3>
-            <div id='relationColumns'>Click Load Board Columns</div>
+            <h3>Mirror Columns</h3>
+            <div id='mirrorColumns'>Click Load Board Columns</div>
         </div>
     </div>
 
