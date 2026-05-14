@@ -14,16 +14,54 @@ public class TestController : ControllerBase
     }
 
     [HttpGet("/test-columns/{boardId}")]
-    public async Task<string> Test(long boardId)
+    public async Task<IActionResult> Test(long boardId)
     {
         var token = Environment.GetEnvironmentVariable("MONDAY_API_TOKEN");
-        return await _monday.GetBoardColumns(boardId, token!);
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return StatusCode(500, new
+            {
+                error = "MONDAY_API_TOKEN is missing on the server environment."
+            });
+        }
+
+        try
+        {
+            var result = await _monday.GetBoardColumns(boardId, token);
+            return Content(result, "application/json");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                error = ex.Message
+            });
+        }
     }
 
     [HttpGet("/test-items/{boardId}")]
-    public async Task<string> GetItems(long boardId)
+    public async Task<IActionResult> GetItems(long boardId)
     {
         var token = Environment.GetEnvironmentVariable("MONDAY_API_TOKEN");
-        return await _monday.GetBoardItems(boardId, token!);
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return StatusCode(500, new
+            {
+                error = "MONDAY_API_TOKEN is missing on the server environment."
+            });
+        }
+
+        try
+        {
+            var result = await _monday.GetBoardItems(boardId, token);
+            return Content(result, "application/json");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                error = ex.Message
+            });
+        }
     }
 }

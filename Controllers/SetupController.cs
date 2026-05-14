@@ -620,9 +620,34 @@ namespace MondayClaudeAI.Controllers
         }
 
         const response = await fetch('/test-items/' + boardId);
-        const data = await response.json();
+        const raw = await response.text();
+        let data;
 
-        sampleItems = data.data.boards[0].items_page.items;
+        try {
+            data = JSON.parse(raw);
+        } catch {
+            alert('Item load failed: invalid server response');
+            return;
+        }
+
+        if (!response.ok) {
+            const serverError = (data && (data.error || data.message)) || raw;
+            alert('Item load failed: ' + serverError);
+            return;
+        }
+
+        if (data.errors && data.errors.length > 0) {
+            alert('Monday API error: ' + (data.errors[0].message || 'Unknown error'));
+            return;
+        }
+
+        const board = data && data.data && data.data.boards && data.data.boards[0];
+        if (!board || !board.items_page || !board.items_page.items) {
+            alert('No item data returned for this board.');
+            return;
+        }
+
+        sampleItems = board.items_page.items;
 
         renderSampleTable(sampleItems);
         document.getElementById('sampleBox').style.display = 'block';
@@ -727,15 +752,42 @@ namespace MondayClaudeAI.Controllers
 
         try {
             const response = await fetch('/test-columns/' + boardId);
-            const data = await response.json();
+            const raw = await response.text();
+            let data;
 
-            if (!response.ok || data.errors || !data.data || !data.data.boards || !data.data.boards[0]) {
-                document.getElementById('boardIdText').innerText = 'Board load failed';
+            try {
+                data = JSON.parse(raw);
+            } catch {
+                document.getElementById('boardIdText').innerText = 'Invalid server response';
                 if (btn) { btn.innerText = '↺ Load Board'; btn.disabled = false; }
+                alert('Board load failed: invalid JSON response from server.');
                 return;
             }
 
-            allColumns = data.data.boards[0].columns;
+            if (!response.ok) {
+                const serverError = (data && (data.error || data.message)) || raw;
+                document.getElementById('boardIdText').innerText = 'Board load failed';
+                if (btn) { btn.innerText = '↺ Load Board'; btn.disabled = false; }
+                alert('Board load failed: ' + serverError);
+                return;
+            }
+
+            if (data.errors && data.errors.length > 0) {
+                document.getElementById('boardIdText').innerText = 'Monday API error';
+                if (btn) { btn.innerText = '↺ Load Board'; btn.disabled = false; }
+                alert('Monday API error: ' + (data.errors[0].message || 'Unknown error'));
+                return;
+            }
+
+            const board = data && data.data && data.data.boards && data.data.boards[0];
+            if (!board || !board.columns) {
+                document.getElementById('boardIdText').innerText = 'No board data returned';
+                if (btn) { btn.innerText = '↺ Load Board'; btn.disabled = false; }
+                alert('No board data returned. Check board ID and token permissions.');
+                return;
+            }
+
+            allColumns = board.columns;
 
             renderColumnGroups(allColumns);
             fillColumnDropdowns(allColumns);
