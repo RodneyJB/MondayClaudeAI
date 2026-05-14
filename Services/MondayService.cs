@@ -522,6 +522,103 @@ public class MondayService
         return result;
     }
 
+    private static HashSet<long> CollectBoardIdsFromSettingsJson(string settingsJson)
+    {
+        var result = new HashSet<long>();
+        if (string.IsNullOrWhiteSpace(settingsJson)) return result;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(settingsJson);
+
+            void PushBoardId(JsonElement value)
+            {
+                if (value.ValueKind == JsonValueKind.Number)
+                {
+                    if (value.TryGetInt64(out var n) && n > 0) result.Add(n);
+                    return;
+                }
+
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    if (long.TryParse(value.GetString(), out var n) && n > 0) result.Add(n);
+                    return;
+                }
+
+                if (value.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in value.EnumerateArray()) PushBoardId(el);
+                }
+            }
+
+            void Walk(JsonElement node)
+            {
+                if (node.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var p in node.EnumerateObject())
+                    {
+                        var k = p.Name.ToLowerInvariant();
+                        if (k == "boardid" || k == "boardids" || k == "linkedboardids" || (k.Contains("board") && k.Contains("id")))
+                        {
+                            PushBoardId(p.Value);
+                        }
+
+                        Walk(p.Value);
+                    }
+                }
+                else if (node.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in node.EnumerateArray()) Walk(el);
+                }
+            }
+
+            Walk(doc.RootElement);
+        }
+        catch
+        {
+            // ignore malformed settings
+        }
+
+        return result;
+    }
+
+    private static string? InferParentRelationId(
+        Dictionary<string, ColumnMeta> metaMap,
+        ItemData item,
+        List<OriginSpec> originSpecs)
+    {
+        var originBoardIds = originSpecs.Select(x => x.BoardId).Where(x => x > 0).ToHashSet();
+
+        var candidates = metaMap.Values
+            .Where(x => IsRelationLikeType(x.Type))
+            .Where(x => item.Columns.TryGetValue(x.Id, out var cv) && cv.LinkedItemIds.Count > 0)
+            .ToList();
+
+        if (candidates.Count == 0) return null;
+
+        if (originBoardIds.Count > 0)
+        {
+            foreach (var c in candidates)
+            {
+                var targetBoards = CollectBoardIdsFromSettingsJson(c.SettingsJson);
+                if (targetBoards.Count > 0 && targetBoards.Overlaps(originBoardIds))
+                {
+                    return c.Id;
+                }
+            }
+        }
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0].Id;
+        }
+
+        return candidates
+            .OrderByDescending(c => item.Columns.TryGetValue(c.Id, out var cv) ? cv.LinkedItemIds.Count : 0)
+            .Select(c => c.Id)
+            .FirstOrDefault();
+    }
+
     private static string PickBestValue(ItemColumnValue? cv)
     {
         if (cv == null) return string.Empty;
@@ -603,6 +700,11 @@ public class MondayService
 
             var parentRelationId = ExtractParentRelationIdFromSettings(meta.SettingsJson, relationIds);
             var originSpecs = ExtractOriginSpecsFromSettings(meta.SettingsJson);
+
+            if (string.IsNullOrWhiteSpace(parentRelationId))
+            {
+                parentRelationId = InferParentRelationId(metaMap, item, originSpecs);
+            }
 
             if (string.IsNullOrWhiteSpace(parentRelationId) || originSpecs.Count == 0)
             {
@@ -716,6 +818,11 @@ public class MondayService
 
             var parentRelId = ExtractParentRelationIdFromSettings(mirror.SettingsJson, relationIds);
             var originSpecs = ExtractOriginSpecsFromSettings(mirror.SettingsJson);
+
+            if (string.IsNullOrWhiteSpace(parentRelId))
+            {
+                parentRelId = InferParentRelationId(rootColumns, rootItem, originSpecs);
+            }
 
             if (string.IsNullOrWhiteSpace(parentRelId) || originSpecs.Count == 0)
             {
