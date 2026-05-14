@@ -21,6 +21,7 @@ public class MondayService
                     id
                     title
                     type
+                    settings_str
                 }}
             }}
         }}";
