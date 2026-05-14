@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MondayClaudeAI")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+374d56dffc8da30483ec5964d91167c45c25a9e3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+049edc9eff095a19f7d8464dbccdd6c3ba387dbd")]
 [assembly: System.Reflection.AssemblyProductAttribute("MondayClaudeAI")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MondayClaudeAI")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
