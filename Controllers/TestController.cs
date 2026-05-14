@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using MondayClaudeAI.Services;
-using System.Text.Json;
 
 namespace MondayClaudeAI.Controllers;
 
@@ -174,6 +173,42 @@ public class TestController : ControllerBase
                 FinalBoardId = finalBoardId,
                 FinalColumnId = finalColumnId
             });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                error = ex.Message
+            });
+        }
+    }
+
+    [HttpGet("/resolve-mirror-columns/{boardId}/{itemId}")]
+    public async Task<IActionResult> ResolveMirrorColumns(long boardId, long itemId)
+    {
+        var token = Environment.GetEnvironmentVariable("MONDAY_API_TOKEN");
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return StatusCode(500, new
+            {
+                error = "MONDAY_API_TOKEN is missing on the server environment."
+            });
+        }
+
+        if (boardId <= 0)
+        {
+            return BadRequest(new { error = "boardId is required." });
+        }
+
+        if (itemId <= 0)
+        {
+            return BadRequest(new { error = "itemId is required." });
+        }
+
+        try
+        {
+            var resolved = await _monday.ResolveMirrorColumnsForItem(boardId, itemId, token);
+            return Ok(resolved);
         }
         catch (Exception ex)
         {

@@ -1012,77 +1012,67 @@ namespace MondayClaudeAI.Controllers
         const mirrors = columns.filter(c => c.type === 'mirror');
         if (mirrors.length === 0) return;
 
-        const relations = columns.filter(c => c.type === 'board_relation');
-        const relationIdSet = new Set(relations.map(r => String(r.id)));
+        const selectedBoardId = Number(boardId);
+        const selectedItemId = Number(selectedSampleItem.id);
+        if (!Number.isFinite(selectedBoardId) || !Number.isFinite(selectedItemId)) return;
 
-        for (const mirrorCol of mirrors) {
-            const mirrorSettings = safeParseSettings(mirrorCol.settings, mirrorCol.settings_str);
-            const parentRelId = extractParentRelationId(mirrorSettings, relationIdSet);
-            if (!parentRelId) continue;
+        const requestKey = `resolved|${selectedBoardId}|${selectedItemId}`;
+        let resolved;
 
-            const linkedItemIds = getLinkedItemIdsForRelation(selectedSampleItem, parentRelId);
-            if (linkedItemIds.length === 0) continue;
-
-            const originSpecs = getMirrorOriginSpecs(mirrorCol);
-            if (originSpecs.length === 0) continue;
-
-            // For each origin spec (origin board/column), resolve the value through the mirror chain
-            const values = [];
-            for (const spec of originSpecs) {
-                for (const linkedItemId of linkedItemIds) {
-                    for (const colId of spec.columnIds) {
-                        const cacheKey = `${spec.boardId}|${linkedItemId}|${colId}`;
-                        
-                        let resolvedValue;
-                        if (originValueCache[cacheKey]) {
-                            resolvedValue = originValueCache[cacheKey];
-                        } else {
-                            try {
-                                const response = await fetch('/resolve-origin-value', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        boardId: spec.boardId,
-                                        itemId: linkedItemId,
-                                        columnId: colId,
-                                        columnSettings: mirrorSettings
-                                    })
-                                });
-
-                                if (response.ok) {
-                                    const result = await response.json();
-                                    resolvedValue = result.value;
-                                    originValueCache[cacheKey] = resolvedValue;
-                                } else {
-                                    console.warn(`Failed to resolve origin value for board ${spec.boardId}, item ${linkedItemId}, column ${colId}`);
-                                }
-                            } catch (e) {
-                                console.warn('Origin value resolution failed', e);
-                            }
-                        }
-
-                        if (resolvedValue && String(resolvedValue).trim() !== '' && String(resolvedValue).toLowerCase() !== 'null') {
-                            values.push(String(resolvedValue));
-                        }
-                    }
+        if (originValueCache[requestKey]) {
+            resolved = originValueCache[requestKey];
+        } else {
+            try {
+                const response = await fetch(`/resolve-mirror-columns/${selectedBoardId}/${selectedItemId}`);
+                const raw = await response.text();
+                let parsed = {};
+                try {
+                    parsed = JSON.parse(raw);
+                } catch {
+                    throw new Error('Invalid mirror resolution response');
                 }
+
+                if (!response.ok) {
+                    throw new Error((parsed && (parsed.error || parsed.message)) || raw || 'Mirror resolution failed');
+                }
+
+                resolved = parsed;
+                originValueCache[requestKey] = resolved;
+            } catch (e) {
+                console.warn('Mirror chain resolution failed', e);
+                return;
+            }
+        }
+
+        const mirrorRows = Array.isArray(resolved && resolved.mirrors) ? resolved.mirrors : [];
+        for (const row of mirrorRows) {
+            const mirrorId = row && row.mirrorColumnId != null ? String(row.mirrorColumnId) : '';
+            if (!mirrorId) continue;
+
+            const target = document.getElementById('col-val-' + mirrorId);
+            if (!target) continue;
+
+            const finalValue = row && row.value != null ? String(row.value) : '';
+            if (finalValue && finalValue.trim() !== '' && finalValue.toLowerCase() !== 'null') {
+                target.innerText = finalValue;
+                target.style.color = '#0f172a';
             }
 
-            // Update the mirror column display with resolved values
-            if (values.length > 0) {
-                const uniqueValues = Array.from(new Set(values));
-                const finalValue = uniqueValues.join(', ');
-                const target = document.getElementById('col-val-' + String(mirrorCol.id));
-                if (target) {
-                    target.innerText = finalValue;
-                    target.title = finalValue;
-                    target.style.color = '#0f172a';
+            const origins = Array.isArray(row && row.origins) ? row.origins : [];
+            if (origins.length > 0) {
+                const originTrace = origins
+                    .filter(o => o)
+                    .map(o => `B:${o.boardId} I:${o.itemId} C:${o.columnId}`)
+                    .slice(0, 12)
+                    .join(' | ');
+                if (originTrace) {
+                    target.title = originTrace;
                 }
             }
         }
     }
 
-    function renderColumnGroups(columns) {
+    async function renderColumnGroups(columns) {
         const direct = columns.filter(c => c.type !== 'mirror' && c.type !== 'board_relation');
         const relations = columns.filter(c => c.type === 'board_relation');
         const mirrors = columns.filter(c => c.type === 'mirror');
@@ -1094,6 +1084,46 @@ namespace MondayClaudeAI.Controllers
         document.getElementById('connectedColumnsTitle').innerText = 'Connected & Mirror Columns (Grouped by Board ID)';
 
         const relationIdSet = new Set(relations.map(r => String(r.id)));
+        const relationLikeMirrorIds = new Set();
+
+        if (selectedSampleItem && selectedSampleItem.id && boardId && mirrors.length > 0) {
+            const cacheKey = `resolved|${String(boardId)}|${String(selectedSampleItem.id)}`;
+            let resolved = originValueCache[cacheKey];
+
+            if (!resolved) {
+                try {
+                    const response = await fetch(`/resolve-mirror-columns/${String(boardId)}/${String(selectedSampleItem.id)}`);
+                    const raw = await response.text();
+                    let parsed = {};
+                    try {
+                        parsed = JSON.parse(raw);
+                    } catch {
+                        throw new Error('Invalid mirror resolution response');
+                    }
+
+                    if (!response.ok) {
+                        throw new Error((parsed && (parsed.error || parsed.message)) || raw || 'Mirror resolution failed');
+                    }
+
+                    resolved = parsed;
+                    originValueCache[cacheKey] = resolved;
+                } catch (e) {
+                    console.warn('Mirror classification fetch failed', e);
+                }
+            }
+
+            const mirrorRows = Array.isArray(resolved && resolved.mirrors) ? resolved.mirrors : [];
+            mirrorRows.forEach(row => {
+                const mirrorId = row && row.mirrorColumnId != null ? String(row.mirrorColumnId) : '';
+                const origins = Array.isArray(row && row.origins) ? row.origins : [];
+                if (!mirrorId || origins.length === 0) return;
+
+                const isRelationLike = origins.some(origin => String(origin && origin.columnType || '').toLowerCase() === 'board_relation');
+                if (isRelationLike) {
+                    relationLikeMirrorIds.add(mirrorId);
+                }
+            });
+        }
 
         const relationMeta = {};
         relations.forEach(rel => {
@@ -1110,17 +1140,20 @@ namespace MondayClaudeAI.Controllers
         mirrors.forEach(m => {
             const settings = safeParseSettings(m.settings, m.settings_str);
             const parentRelId = extractParentRelationId(settings, relationIdSet);
-            let boardIds = collectBoardIds(settings);
 
-            if ((!boardIds || boardIds.length === 0) && parentRelId && relationMeta[parentRelId]) {
-                boardIds = relationMeta[parentRelId].boardIds;
-            }
+            // Mirrors should inherit the board group of the relationship column they hang off,
+            // not the board(s) they mirror into. This keeps connector mirrors grouped with
+            // the relationship that owns them.
+            let boardIds = parentRelId && relationMeta[parentRelId]
+                ? relationMeta[parentRelId].boardIds
+                : collectBoardIds(settings);
 
             mirrorMeta[String(m.id)] = {
                 column: m,
                 settings,
                 parentRelId,
-                boardIds: boardIds.length ? boardIds : ['unknown']
+                boardIds: boardIds.length ? boardIds : ['unknown'],
+                isRelationLike: relationLikeMirrorIds.has(String(m.id))
             };
         });
 
@@ -1219,22 +1252,36 @@ namespace MondayClaudeAI.Controllers
                     <span class='type-badge'>${getTypeIcon(rel.type)} board_relation</span>
                 </div>`;
 
-                const childMirrors = Array.from(group.mirrorIds)
+                const childConnectedItems = Array.from(group.mirrorIds)
                     .map(id => mirrorMeta[id])
-                    .filter(m => m && m.parentRelId === String(rel.id))
+                    .filter(m => m && m.parentRelId === String(rel.id) && m.isRelationLike)
                     .map(m => m.column)
                     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 
-                if (childMirrors.length > 0) {
+                const childMirrors = Array.from(group.mirrorIds)
+                    .map(id => mirrorMeta[id])
+                    .filter(m => m && m.parentRelId === String(rel.id) && !m.isRelationLike)
+                    .map(m => m.column)
+                    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+                const childItems = [];
+                childConnectedItems.forEach(c => childItems.push({ column: c, kind: 'relation-like' }));
+                childMirrors.forEach(c => childItems.push({ column: c, kind: 'mirror' }));
+
+                if (childItems.length > 0) {
                     html += `<div style='margin-left:12px; border-left:2px solid #cbd5e1; padding-left:10px; margin-bottom:10px;'>`;
-                    childMirrors.forEach(m => {
+                    childItems.forEach(entry => {
+                        const m = entry.column;
                         usedMirrorIds.add(String(m.id));
                         const mv = getColumnDisplayValue(selectedSampleItem, m);
                         const smv = escapeHtml(mv);
-                        html += `<div class='item mirror' id='col-item-${m.id}' style='margin-bottom:4px;'>
+                        const typeLabel = entry.kind === 'relation-like' ? 'board_relation' : m.type;
+                        const badgeIcon = entry.kind === 'relation-like' ? getTypeIcon('board_relation') : getTypeIcon(m.type);
+                        const badgeClass = entry.kind === 'relation-like' ? 'relation' : 'mirror';
+                        html += `<div class='item ${badgeClass}' id='col-item-${m.id}' style='margin-bottom:4px;'>
                             <strong>${m.title}</strong>
                             <div id='col-val-${m.id}' title='${smv}' style='margin-top:4px;font-size:12px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>${smv || '<span class=""empty-value"">(empty)</span>'}</div>
-                            <span class='type-badge'>${getTypeIcon(m.type)} ${m.type}</span>
+                            <span class='type-badge'>${badgeIcon} ${typeLabel}</span>
                         </div>`;
                     });
                     html += `</div>`;
