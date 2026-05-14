@@ -1126,6 +1126,44 @@ namespace MondayClaudeAI.Controllers
         return '';
     }
 
+    function getFormulaExpression(col) {
+        if (!col) return '';
+
+        if (col.settings && typeof col.settings === 'object' && typeof col.settings.formula === 'string') {
+            return col.settings.formula;
+        }
+
+        try {
+            const s = JSON.parse(col.settings_str || '{}');
+            if (typeof s.formula === 'string') return s.formula;
+        } catch {
+            // ignore
+        }
+
+        return '';
+    }
+
+    function formulaReferencesMirrorOrRelation(col, columns) {
+        const expr = getFormulaExpression(col);
+        if (!expr) return false;
+
+        const ids = [];
+        const re = /\{([^}]+)\}/g;
+        let match;
+        while ((match = re.exec(expr)) !== null) {
+            ids.push(String(match[1] || '').trim());
+        }
+
+        if (ids.length === 0) return false;
+
+        const byId = new Map((columns || []).map(c => [String(c.id), c]));
+        return ids.some(id => {
+            const ref = byId.get(id);
+            if (!ref) return id.startsWith('lookup_') || id.startsWith('board_relation_');
+            return ref.type === 'mirror' || ref.type === 'board_relation';
+        });
+    }
+
     function getColumnDisplayValue(item, col) {
         if (!item) return '';
         if (col.id === 'name') return item.name || '';
@@ -1133,8 +1171,20 @@ namespace MondayClaudeAI.Controllers
         const cv = item.column_values.find(v => v.id === col.id);
         if (!cv) return '';
 
-        // For formula and mirror columns, prioritize text
-        if (col.type === 'formula' || col.type === 'mirror') {
+        // Formula columns expose display_value (text/value are usually empty)
+        if (col.type === 'formula') {
+            if (cv.display_value && cv.display_value.trim() !== '') {
+                return cv.display_value;
+            }
+
+            // monday API limitation: formulas using mirror/connect sources can return empty display_value
+            if (formulaReferencesMirrorOrRelation(col, allColumns)) {
+                return '(API limitation: formula references mirror/connect)';
+            }
+        }
+
+        // Mirror columns often have useful text values
+        if (col.type === 'mirror') {
             if (cv.text && cv.text.trim() !== '') {
                 return cv.text;
             }

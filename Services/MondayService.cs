@@ -61,8 +61,12 @@ public class MondayService
                         name
                         column_values {{
                             id
+                            type
                             text
                             value
+                            ... on FormulaValue {{
+                                display_value
+                            }}
                             ... on MirrorValue {{
                                 display_value
                             }}
